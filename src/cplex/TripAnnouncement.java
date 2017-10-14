@@ -5,32 +5,17 @@ public class TripAnnouncement {
 	public int type;	// 1 - driver; 2 - rider
 	public int earlyTime;	// earliest departure time
 	public int lateTime;	// latest arrival time
-	public ODPair od;
+	public int origin;	// node which represents origin
+	public int destination;	// node which represents destination
 	
 	// Various constructors
-	public TripAnnouncement(int id, int type, int earlyTime, int lateTime, ODPair od) {
+	public TripAnnouncement(int id, int type, int earlyTime, int lateTime, int origin, int destination) {
 		this.id = id;
 		this.type = type;
 		this.earlyTime = earlyTime;
 		this.lateTime = lateTime;
-		this.od = od;
+		this.origin = origin;
+		this.destination = destination;
 	}
 	
-	public TripAnnouncement(int id, int type, int earlyTime, int lateTime, Coordinate origin, Coordinate destination) {
-		this.id = id;
-		this.type = type;
-		this.earlyTime = earlyTime;
-		this.lateTime = lateTime;
-		this.od = new ODPair(origin, destination);
-	}
-	
-	public TripAnnouncement(int id, int type, int earlyTime, int lateTime, double x1, double y1, double x2, double y2) {
-		this.id = id;
-		this.type = type;
-		this.earlyTime = earlyTime;
-		this.lateTime = lateTime;
-		Coordinate origin = new Coordinate(x1, y1);
-		Coordinate destination = new Coordinate(x2, y2);
-		this.od = new ODPair(origin, destination);
-	}
 }
