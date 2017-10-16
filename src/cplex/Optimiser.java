@@ -46,12 +46,6 @@ public class Optimiser {
 			generateTimeMatrix(driverAnnouncements, Boolean.TRUE, driverLatestArrival);
 			generateTimeMatrix(riderAnnouncements, Boolean.FALSE, riderEarliestDeparture);
 			generateTimeMatrix(riderAnnouncements, Boolean.TRUE, riderLatestArrival);
-			
-			for (int i = 0; i < nDrivers; i++) {
-				for (int j = 0; j < nRiders; j++) 
-					System.out.print(todor[i][j] + " ");
-				System.out.println();
-			}
 				
 			
 // *** Decision Variables ***
@@ -152,12 +146,41 @@ public class Optimiser {
 			for (int i = 0; i < nDrivers; i++) {
 				cplex.addEq(horizontalSum[i], 1, "Constraint Total Riders per Driver");	// Each driver only has 1 driver at the most, or else go alone
 			}
-			
 			for (int j = 0; j < nRiders; j++) {
 				cplex.addEq(verticalSum[j], 1, "Constraint Total Drivers per Rider");	// Each rider only has 1 driver at the most, or else go alone
 			}
+			
+			/*
+			 * Blocking Constraints
+			 * Prevents blocking from occurring by ensuring that for all drivers and riders, they are matched with their most preferred partner
+			 * Algorithm works by considering the type of cases that makes it possible to have a scenario where terms sum to 0 - only where
+			 * the driver-rider pair most preferred to each other do not get matched by the system.
+			 * Sum of total blocks and x[i][j] must sum to at least 1 for time feasible and distance feasible solutions
+			 */
+			for (int i = 0; i < nDrivers; i++) {
+				for (int j = 0; j < nRiders; j++) {
+					ArrayList<Integer> driverBlock = Block.calcDriverBlock(i, j, todor, tordr, tdrdd, toddd, nRiders);
+					ArrayList<Integer> riderBlock = Block.calcRiderBlock(i, j, todor, tordr, tdrdd, toddd, nDrivers);
+					IloLinearIntExpr sumBlocks = cplex.linearIntExpr();
+					int distanceInfeasibility = 0;
+					int timeIncompatibility = 0;
+					
+					for (int k = 0; k < driverBlock.size(); k++) 
+						sumBlocks.addTerm(1, x[i][driverBlock.get(k)]);
+					for (int l = 0; l < riderBlock.size(); l++)
+						sumBlocks.addTerm(1, x[riderBlock.get(l)][j]);
+					
+					// Equals 1 if incompatible - for distance, incompatible if negative distance savings; for time, incompatible if timings do not match
+					distanceInfeasibility = Block.calcDistFeasibility(i, j, c, odDrivers, odRiders);
+					timeIncompatibility = Block.calcTimeIncompatibility(i, j, todor, tordr, tdrdd, driverAnnouncements, riderAnnouncements);
+					
+					// Adds blocking constraints for all distance and time compatible blocks
+					if (distanceInfeasibility == 0 && timeIncompatibility == 0)
+						cplex.addGe(cplex.sum(sumBlocks, x[i][j]), 1);
+				}
+			}
 
-			// Printing Solutions
+			// Activating Solver and printing solutions
 			if (cplex.solve()) {
 				System.out.println("Total Vehicle KM: " + cplex.getObjValue());
 				System.out.println();
@@ -184,6 +207,7 @@ public class Optimiser {
 			
 		} catch (IloException e) {
 			e.printStackTrace();
+			System.out.println("infeasible");
 		}
 	}
 	
@@ -218,9 +242,9 @@ public class Optimiser {
 		for (int i = 0; i < numDrivers; i++) {
 			for (int j = 0; j < numRiders; j++) {
 				c[i][j] = oo[i][j] + dd[i][j] + odRiders[j];
-				System.out.print(c[i][j] + " ");
+				//System.out.print(c[i][j] + " ");
 			}
-			System.out.println();
+			//System.out.println();
 		}
 		return;
 	}
