@@ -1,14 +1,35 @@
 package cplex;
 
+import filereader.*;
+
 import ilog.concert.*;
 import ilog.cplex.*;
 import java.util.*;
+import java.io.IOException;
 import java.math.*;
+import java.nio.file.NoSuchFileException;
 
 public class Optimiser {
-	
+	private static final int TEST_NUM = 1;
 	public static void main(String[] args) {
+		ArrayList<String> rawData = readData();
+		Data.processData(rawData);
 		model();
+	}
+	
+	public static ArrayList<String> readData() {
+		try {
+			String fileName = ReadInput.getFileName(TEST_NUM);
+			ArrayList<String> rawData = new ArrayList<String>();
+			if (ReadInput.checkPath(fileName))
+				rawData = ReadInput.readFile(fileName);
+			return rawData;
+		} catch (NoSuchFileException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return null;
 	}
 	
 	public static void model() {
@@ -17,11 +38,13 @@ public class Optimiser {
 			IloCplex cplex = new IloCplex();
 			ArrayList<TripAnnouncement> driverAnnouncements = new ArrayList<TripAnnouncement>();
 			ArrayList<TripAnnouncement> riderAnnouncements = new ArrayList<TripAnnouncement>();
-			Data.setList();
+			// Data.setList();
 			categorise(driverAnnouncements, riderAnnouncements);
 			
 			int nDrivers = driverAnnouncements.size();
 			int nRiders = riderAnnouncements.size();
+			
+			assert (nDrivers + nRiders == Data.numAnnouncements);
 			
 			double oo[][] = new double[nDrivers][nRiders];
 			double dd[][] = new double[nDrivers][nRiders];

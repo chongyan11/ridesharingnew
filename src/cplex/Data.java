@@ -6,9 +6,10 @@ package cplex;
 import java.util.*;
 
 public class Data {
-	public static int numAnnouncements = 9; // Some function should define numAnnouncements
+	public static int numAnnouncements; // Some function should define numAnnouncements
 	
 	// TO FIND A WAY TO READ THESE DISTANCES AND TIMES FROM EXCEL FILE 
+	private static final int numInfo = 6;
 	public static final int numNodes = 6;
 	public static double[][] distances = {{0.0, 2.5, 2.1, 15.4, 16.4, 19.4}, 
 	                                      {2.5, 0.0, 2.6, 17.1, 18.1 ,18.8},
@@ -26,17 +27,19 @@ public class Data {
 	
 	// Test set related
 	public static ArrayList<TripAnnouncement> tripAnnouncements = new ArrayList<TripAnnouncement> ();
-	private static int[] idList = 			{1, 2, 3, 4, 5, 6, 7, 8, 9};
-	private static int[] typeList = 		{1, 2, 1, 2, 2, 1, 1, 1, 2};
-	private static int[] earlyTimeList = 	{5, 15, 20, 25, 25, 15, 15, 30, 0};
-	private static int[] lateTimeList = 	{65, 70, 80, 60, 50, 70, 65, 70, 80};
-	private static int[] originList = 		{1, 2, 3, 1, 2, 4, 5, 6, 5};
-	private static int[] destinationList = 	{4, 5, 6, 3, 4, 2, 2, 1, 6};
 	
-	public static void setList() {
+	public static void processData(ArrayList<String> rawData) {
+		int[][] info = new int[rawData.size()][numInfo];
+		for (int i = 0; i < rawData.size(); i++) {
+			String[] line = rawData.get(i).split(", ");
+			for (int j = 0; j < numInfo; j++) {
+				info[i][j] = Integer.parseInt(line[j]);
+			}
+		}
 		tripAnnouncements.clear();
-		for (int i = 0; i < numAnnouncements; i++) {
-			TripAnnouncement trip = new TripAnnouncement(idList[i], typeList[i], earlyTimeList[i], lateTimeList[i], originList[i], destinationList[i]);
+		numAnnouncements = rawData.size();
+		for (int i = 0; i < rawData.size(); i++) {
+			TripAnnouncement trip = new TripAnnouncement(info[i][0], info[i][1], info[i][2], info[i][3], info[i][4], info[i][5]);
 			tripAnnouncements.add(trip);
 		}
 	}
@@ -51,4 +54,18 @@ public class Data {
 	 * 5 - Somerset MRT
 	 * 6 - Serangoon MRT
 	 */
+	
+//	private static int[] idList = 			{1, 2, 3, 4, 5, 6, 7, 8, 9};
+//	private static int[] typeList = 		{1, 2, 1, 2, 2, 1, 1, 1, 2};
+//	private static int[] earlyTimeList = 	{5, 15, 20, 25, 25, 15, 15, 30, 0};
+//	private static int[] lateTimeList = 	{65, 70, 80, 60, 50, 70, 65, 70, 80};
+//	private static int[] originList = 		{1, 2, 3, 1, 2, 4, 5, 6, 5};
+//	private static int[] destinationList = 	{4, 5, 6, 3, 4, 2, 2, 1, 6};
+//	public static void setList() {
+//		tripAnnouncements.clear();
+//		for (int i = 0; i < numAnnouncements; i++) {
+//			TripAnnouncement trip = new TripAnnouncement(idList[i], typeList[i], earlyTimeList[i], lateTimeList[i], originList[i], destinationList[i]);
+//			tripAnnouncements.add(trip);
+//		}
+//	}
 }
