@@ -46,11 +46,14 @@ public class Optimiser {
 			
 			assert (nDrivers + nRiders == Data.numAnnouncements);
 			
+			// Distance variables
 			double oo[][] = new double[nDrivers][nRiders];
 			double dd[][] = new double[nDrivers][nRiders];
 			double odDrivers[] = new double [nDrivers];
 			double odRiders[] = new double[nRiders];
-			double c[][] = new double [nDrivers][nRiders];
+			double rideshareDistance[][] = new double [nDrivers][nRiders];
+			
+			// Time variables
 			double todor[][] = new double[nDrivers][nRiders];
 			double tordr[] = new double[nRiders];
 			double tdrdd[][] = new double[nDrivers][nRiders];
@@ -60,16 +63,52 @@ public class Optimiser {
 			double riderEarliestDeparture[] = new double[nRiders];
 			double riderLatestArrival[] = new double[nRiders];
 			
-// ** Create assert function to check numNodes = dimensions of the distance matrix
+			// Cost variables
+			double soloDriverTC[] = new double[nDrivers];
+			double soloDriverF[] = new double[nDrivers];
+			double soloDriverTotalCost[] = new double[nDrivers];
+			double soloRiderTC[] = new double[nRiders];
+			double soloRiderF[] = new double[nRiders];
+			double soloRiderTotalCost[] = new double[nRiders];
+			double shareDriverTC[][] = new double[nDrivers][nRiders];
+			double shareDriverF[][] = new double[nDrivers][nRiders];
+			double shareDriverIC[][] = new double[nDrivers][nRiders];
+			double shareDriverTotalCost[][] = new double[nDrivers][nRiders];
+			double minPayment[][] = new double[nDrivers][nRiders];
+			double maxPayment[][] = new double[nDrivers][nRiders];
+			// double shareRider[][] = new double[nDrivers][nRiders];	- same as solo rider due to assumptions
 			
+			// Origin and Destination sets
+			int driverOrigins[] = new int[nDrivers];
+			int driverDestinations[] = new int[nDrivers];
+			int riderOrigins[] = new int[nRiders];
+			int riderDestinations[] = new int[nRiders];
+			
+// ** TODO: Create assert function to check numNodes = dimensions of the distance matrix
 			generateDistances(driverAnnouncements, riderAnnouncements, oo, dd, odDrivers, odRiders, nDrivers, nRiders);
-			generateRideShareDistance(c, oo, dd, odRiders, nDrivers, nRiders);
+			generateRideShareDistance(rideshareDistance, oo, dd, odRiders, nDrivers, nRiders);
 			generateTravelTime(driverAnnouncements, riderAnnouncements, todor, tordr, tdrdd, toddd, nDrivers, nRiders);
 			generateTimeMatrix(driverAnnouncements, Boolean.FALSE, driverEarliestDeparture);
 			generateTimeMatrix(driverAnnouncements, Boolean.TRUE, driverLatestArrival);
 			generateTimeMatrix(riderAnnouncements, Boolean.FALSE, riderEarliestDeparture);
 			generateTimeMatrix(riderAnnouncements, Boolean.TRUE, riderLatestArrival);
-				
+			
+			driverOrigins = generateLocationSet(driverAnnouncements, Boolean.TRUE);
+			driverDestinations = generateLocationSet(driverAnnouncements, Boolean.FALSE);
+			riderOrigins = generateLocationSet(riderAnnouncements, Boolean.TRUE);
+			riderDestinations = generateLocationSet(riderAnnouncements, Boolean.FALSE);
+			
+			soloDriverTC = Cost.generateSoloTimeCost(toddd, nDrivers);
+			soloDriverF = Cost.generateSoloDriverOutOfPocketCost(odDrivers, nDrivers, driverDestinations);
+			soloDriverTotalCost = Cost.generateSoloDriverTotalCost(soloDriverTC, soloDriverF, nDrivers);
+			soloRiderTC = Cost.generateSoloTimeCost(tordr, nRiders);
+			soloRiderF = Cost.generateSoloRiderOutOfPocketCost(odRiders, tordr, nRiders);
+			soloRiderTotalCost = Cost.generateSoloRiderTotalCost(soloRiderTC, soloRiderF, nRiders);
+			shareDriverTC = Cost.generateShareDriverTimeCost(todor, tordr, tdrdd, nDrivers, nRiders);
+			shareDriverF = Cost.generateShareDriverOutOfPocketCost(rideshareDistance, nDrivers, nRiders, driverDestinations);
+			shareDriverIC = Cost.generateShareDriverInconvenienceCost(rideshareDistance, odDrivers, odRiders, todor, tordr, tdrdd, toddd, nDrivers, nRiders);
+			minPayment = Cost.generateMinRidesharingPayment(shareDriverTotalCost, soloDriverTotalCost, nDrivers, nRiders);
+			maxPayment = shareDriverF;	// at this point, max ridesharing fare = taxi fare
 			
 // *** Decision Variables ***
 			IloIntVar[][] x = new IloIntVar[nDrivers][];	// method to instantiate 2D array
@@ -106,7 +145,7 @@ public class Optimiser {
 			IloLinearNumExpr objective = cplex.linearNumExpr();
 			for (int i = 0; i < nDrivers; i++) {
 				for (int j = 0; j < nRiders; j++) {
-					objective.addTerm(c[i][j], x[i][j]);
+					objective.addTerm(rideshareDistance[i][j], x[i][j]);
 				}
 				objective.addTerm(odDrivers[i], y[i]);
 			}
@@ -194,7 +233,7 @@ public class Optimiser {
 						sumBlocks.addTerm(1, x[riderBlock.get(l)][j]);
 					
 					// Equals 1 if incompatible - for distance, incompatible if negative distance savings; for time, incompatible if timings do not match
-					distanceInfeasibility = Block.calcDistFeasibility(i, j, c, odDrivers, odRiders);
+					distanceInfeasibility = Block.calcDistFeasibility(i, j, rideshareDistance, odDrivers, odRiders);
 					timeIncompatibility = Block.calcTimeIncompatibility(i, j, todor, tordr, tdrdd, driverAnnouncements, riderAnnouncements);
 					
 					// Adds blocking constraints for all distance and time compatible blocks
@@ -295,5 +334,16 @@ public class Optimiser {
 			}
 		}
 		return;
+	}
+	
+	public static int[] generateLocationSet(ArrayList<TripAnnouncement> list, Boolean isOrigin) {
+		int[] locationList = new int[list.size()];
+		for (int i = 0; i < list.size(); i++) {
+			if (isOrigin)
+				locationList[i] = list.get(i).origin;
+			else
+				locationList[i] = list.get(i).destination;
+		}
+		return locationList;
 	}
 }
