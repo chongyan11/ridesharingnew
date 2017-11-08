@@ -10,7 +10,7 @@ import java.math.*;
 import java.nio.file.NoSuchFileException;
 
 public class Optimiser {
-	private static final int TEST_NUM = 1;
+	private static final int TEST_NUM = 2;
 	public static void main(String[] args) {
 		ArrayList<String> rawData = readData();
 		Data.processData(rawData);
@@ -107,18 +107,25 @@ public class Optimiser {
 			shareDriverTC = Cost.generateShareDriverTimeCost(todor, tordr, tdrdd, nDrivers, nRiders);
 			shareDriverF = Cost.generateShareDriverOutOfPocketCost(rideshareDistance, nDrivers, nRiders, driverDestinations);
 			shareDriverIC = Cost.generateShareDriverInconvenienceCost(rideshareDistance, odDrivers, odRiders, todor, tordr, tdrdd, toddd, nDrivers, nRiders);
+			shareDriverTotalCost = Cost.generateShareDriverTotalCost(shareDriverTC, shareDriverF, shareDriverIC, nDrivers, nRiders);
 			minPayment = Cost.generateMinRidesharingPayment(shareDriverTotalCost, soloDriverTotalCost, nDrivers, nRiders);
-			maxPayment = shareDriverF;	// at this point, max ridesharing fare = taxi fare
+			maxPayment = Cost.generateMaxRidesharingPayment(soloRiderF, nDrivers, nRiders);	// at this point, max ridesharing fare = taxi fare
 			
 // *** Decision Variables ***
-			IloIntVar[][] x = new IloIntVar[nDrivers][];	// method to instantiate 2D array
+			IloIntVar[][] x = new IloIntVar[nDrivers][];	// DVAR: rideshare array (i.e. value of 1 indicates driver i matched with rider j) 
+			// method to instantiate 2D array
 			for (int i = 0; i < nDrivers; i++) {
 				x[i] = cplex.intVarArray(nRiders, 0, 1);	// matching matrix - each row of x is an integer array of size equal to number of riders, limited from 0 to 1
 			}
-			IloIntVar[] y = cplex.intVarArray(nDrivers, 0, 1);	// value of 1 indicates driver i is driving alone
-			IloIntVar[] w = cplex.intVarArray(nRiders, 0, 1);		// value of 1 indicates rider j is traveling alone	
-			IloNumVar[] driverDepartTime = cplex.numVarArray(nDrivers, 0, Double.MAX_VALUE);	// scheduled departure times for drivers
-			IloNumVar[] riderDepartTime = cplex.numVarArray(nRiders, 0, Double.MAX_VALUE);	// scheduled departure time for riders
+			IloIntVar[] y = cplex.intVarArray(nDrivers, 0, 1);	// DVAR: solo driver array (i.e. value of 1 indicates driver i is driving alone)
+			IloIntVar[] w = cplex.intVarArray(nRiders, 0, 1);		// DVAR: solo rider array (i.e. value of 1 indicates rider j is traveling alone)	
+			IloNumVar[] driverDepartTime = cplex.numVarArray(nDrivers, 0, Double.MAX_VALUE);	// DVAR: scheduled departure times for drivers
+			IloNumVar[] riderDepartTime = cplex.numVarArray(nRiders, 0, Double.MAX_VALUE);	// DVAR: scheduled departure time for riders
+			
+			IloNumVar[][] p = new IloNumVar[nDrivers][];	// DVAR: amount of ridesharing payment rider j pays to driver i if matched (i.e. x[i][j] == 1)
+			for (int i = 0; i < nDrivers; i++) {
+				p[i] = cplex.numVarArray(nRiders, 0.0, Double.MAX_VALUE);
+			}
 			
 			IloLinearIntExpr[] horizontalSum = new IloLinearIntExpr[nDrivers];
 			IloLinearIntExpr[] verticalSum = new IloLinearIntExpr[nRiders];
@@ -213,6 +220,7 @@ public class Optimiser {
 			}
 			
 			/*
+			 * TODO: Modify blocking constraints to not only consider distance
 			 * Blocking Constraints
 			 * Prevents blocking from occurring by ensuring that for all drivers and riders, they are matched with their most preferred partner
 			 * Algorithm works by considering the type of cases that makes it possible to have a scenario where terms sum to 0 - only where
@@ -241,8 +249,15 @@ public class Optimiser {
 						cplex.addGe(cplex.sum(sumBlocks, x[i][j]), 1);
 				}
 			}
+			
+			/*
+			 * Ridesharing Payment Constraints
+			 * Ridesharing is only feasible if the p[i][j] > minPayment[i][j] && p[i][j] < maxPayment[i][j]. In other words, the proposed ridesharing
+			 * payment must benefit both the driver and the rider
+			 */
 
-			// Activating Solver and printing solutions
+
+// *** Solving and printing solutions ***
 			if (cplex.solve()) {
 				System.out.println("Total Vehicle KM: " + cplex.getObjValue());
 				System.out.println();
@@ -264,7 +279,13 @@ public class Optimiser {
 				System.out.println();
 				for (int j = 0; j < nRiders; j++) 
 					System.out.println("Riders " + (j+1) + " leaves at " + cplex.getValue(riderDepartTime[j]));
-				
+				System.out.println();
+				for (int i = 0; i < nDrivers; i++) {
+					for (int j = 0; j < nRiders; j++) {
+						// System.out.print(cplex.getValue(p[i][j]) + " ");
+					}
+					System.out.println();
+				}
 			}
 			
 		} catch (IloException e) {

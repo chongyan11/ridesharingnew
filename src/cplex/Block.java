@@ -55,7 +55,7 @@ public class Block {
 	// Returns 1 if distance savings is negative for a best matching pair scenario
 	public static int calcDistFeasibility(int driver, int rider, double[][] c, double[] odDrivers, double[] odRiders) {
 		double distanceSavings = odDrivers[driver] + odRiders[rider] - c[driver][rider];
-		System.out.println("Driver " + (driver+1) + ", Rider " + (rider+1) + " = " + distanceSavings);
+//		System.out.println("Driver " + (driver+1) + ", Rider " + (rider+1) + " = " + distanceSavings);
 		if (distanceSavings <= -0.01)
 			return 1;
 		else 

@@ -3,7 +3,7 @@ package cplex;
 public class Cost {
 	// read cost coefficients from file later on
 	private static final double VALUE_OF_TIME = 0.5;
-	private static final double DRIVER_IC_TIME = 0.7;
+	private static final double DRIVER_IC_TIME = 0.2;
 	private static final double DRIVER_IC_DISTANCE = 0.25;
 	private static final double RIDER_IC_TIME = 0;
 	private static final double RIDER_IC_DISTANCE = 0;
@@ -32,8 +32,9 @@ public class Cost {
 	
 	public static double[] generateSoloDriverOutOfPocketCost(double[] odDrivers, int nDrivers, int[] driverDestinations) {
 		double[] soloDriverF = new double[nDrivers];
+		setUpParkCost();
 		for (int i = 0; i < nDrivers; i++) {
-			soloDriverF[i] = odDrivers[i] * FUEL_UNIT_COST + PARKING_DAY_COST[driverDestinations[i]];
+			soloDriverF[i] = odDrivers[i] * FUEL_UNIT_COST + PARKING_DAY_COST[driverDestinations[i]-1];
 		}
 		return soloDriverF;
 	}
@@ -49,7 +50,7 @@ public class Cost {
 	public static double[] generateSoloRiderOutOfPocketCost(double[] odRiders, double[] tordr, int nRiders) {
 		double[] soloRiderF = new double[nRiders];
 		for (int i = 0; i < nRiders; i++) {
-			soloRiderF[i] = TAXI_BASE + (odRiders[i]/TAXI_DISTANCE_UNIT*TAXI_DISTANCE_COST) + (tordr[i]/TAXI_TIME_UNIT*TAXI_TIME_COST);
+			soloRiderF[i] = TAXI_BASE + ((odRiders[i] - 1)/TAXI_DISTANCE_UNIT*TAXI_DISTANCE_COST) + (tordr[i]/TAXI_TIME_UNIT*TAXI_TIME_COST);
 		}
 		return soloRiderF;
 	}
@@ -74,9 +75,10 @@ public class Cost {
 	
 	public static double[][] generateShareDriverOutOfPocketCost(double[][] rideShareDistance, int nDrivers, int nRiders, int[] driverDestinations) {
 		double[][] shareDriverOutOfPocketCost = new double[nDrivers][nRiders];
+		setUpParkCost();
 		for (int i = 0; i < nDrivers; i++) {
 			for (int j = 0; j < nRiders; j++) {
-				shareDriverOutOfPocketCost[i][j] = rideShareDistance[i][j] * FUEL_UNIT_COST + PARKING_DAY_COST[driverDestinations[i]];
+				shareDriverOutOfPocketCost[i][j] = rideShareDistance[i][j] * FUEL_UNIT_COST + PARKING_DAY_COST[driverDestinations[i]-1];
 			}
 		}
 		return shareDriverOutOfPocketCost;
@@ -100,6 +102,16 @@ public class Cost {
 		return IC;
 	}
 	
+	public static double[][] generateShareDriverTotalCost(double[][] shareDriverTC, double[][] shareDriverF, double[][] shareDriverIC, int nDrivers, int nRiders) {
+		double[][] totalCost = new double[nDrivers][nRiders];
+		for (int i = 0; i < nDrivers; i++) {
+			for (int j = 0; j < nRiders; j++) {
+				totalCost[i][j] = shareDriverTC[i][j] + shareDriverF[i][j] + shareDriverIC[i][j];
+			}
+		}
+		return totalCost;
+	}
+	
 	public static double[][] generateMinRidesharingPayment(double[][] shareDriverTotalCost, double[] soloDriverTotalCost, int nDrivers, int nRiders) {
 		double[][] minPayment = new double[nDrivers][nRiders];
 		for (int i = 0; i < nDrivers; i++) {
@@ -108,5 +120,15 @@ public class Cost {
 			}
 		}
 		return minPayment;
+	}
+	
+	public static double[][] generateMaxRidesharingPayment(double[] soloRiderF, int nDrivers, int nRiders) {
+		double[][] maxPayment = new double[nDrivers][nRiders];
+		for (int i = 0; i < nDrivers; i++) {
+			for (int j = 0; j < nRiders; j++) {
+				maxPayment[i][j] = soloRiderF[j];
+			}
+		}
+		return maxPayment;
 	}
 }
