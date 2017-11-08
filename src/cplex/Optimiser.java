@@ -77,6 +77,7 @@ public class Optimiser {
 			double minPayment[][] = new double[nDrivers][nRiders];
 			double maxPayment[][] = new double[nDrivers][nRiders];
 			// double shareRider[][] = new double[nDrivers][nRiders];	- same as solo rider due to assumptions
+			int feasiblePaymentMatches[][] = new int[nDrivers][nRiders];
 			
 			// Origin and Destination sets
 			int driverOrigins[] = new int[nDrivers];
@@ -110,6 +111,7 @@ public class Optimiser {
 			shareDriverTotalCost = Cost.generateShareDriverTotalCost(shareDriverTC, shareDriverF, shareDriverIC, nDrivers, nRiders);
 			minPayment = Cost.generateMinRidesharingPayment(shareDriverTotalCost, soloDriverTotalCost, nDrivers, nRiders);
 			maxPayment = Cost.generateMaxRidesharingPayment(soloRiderF, nDrivers, nRiders);	// at this point, max ridesharing fare = taxi fare
+			feasiblePaymentMatches = Cost.generateFeasiblePaymentMatches(minPayment, maxPayment, nDrivers, nRiders);
 			
 // *** Decision Variables ***
 			IloIntVar[][] x = new IloIntVar[nDrivers][];	// DVAR: rideshare array (i.e. value of 1 indicates driver i matched with rider j) 
@@ -168,21 +170,32 @@ public class Optimiser {
 			 * To ensure convexity, while only restricting this constraint to matched participants, IloOr object was invoked.
 			 * Generally, if the time constraints relating to driver departure, rider departure, rider arrival, driver arrival
 			 * cannot be met, then x[i][j] will be constrained to 0 (i.e. no match).
+			 * 
+			 * Ridesharing Payment Constraints for matched participants
+			 * Ridesharing is only feasible if the p[i][j] > minPayment[i][j] && p[i][j] < maxPayment[i][j]. In other words, the proposed ridesharing
+			 * payment must benefit both the driver and the rider
 			 */
 			for (int i = 0; i < nDrivers; i ++) {
 				for (int j = 0; j < nRiders; j++) {
-					IloAnd subTimeConstraints = cplex.and();
-					IloOr timeConstraints = cplex.or();
+					IloAnd subConstraints = cplex.and();
+					IloAnd timeConstraints = cplex.and();
+					IloAnd paymentConstraints = cplex.and();
+					IloOr constraints = cplex.or();
 					
-					subTimeConstraints.add(cplex.ge(cplex.sum(driverDepartTime[i], todor[i][j]), riderEarliestDeparture[j]));
-					subTimeConstraints.add(cplex.le(cplex.sum(cplex.sum(driverDepartTime[i], todor[i][j]), tordr[j]), riderLatestArrival[j]));
-					subTimeConstraints.add(cplex.le(cplex.sum(cplex.sum(cplex.sum(driverDepartTime[i], todor[i][j]), tordr[j]), tdrdd[i][j]), driverLatestArrival[i]));
-					subTimeConstraints.add(cplex.ge(driverDepartTime[i], driverEarliestDeparture[i]));
+					timeConstraints.add(cplex.ge(cplex.sum(driverDepartTime[i], todor[i][j]), riderEarliestDeparture[j]));
+					timeConstraints.add(cplex.le(cplex.sum(cplex.sum(driverDepartTime[i], todor[i][j]), tordr[j]), riderLatestArrival[j]));
+					timeConstraints.add(cplex.le(cplex.sum(cplex.sum(cplex.sum(driverDepartTime[i], todor[i][j]), tordr[j]), tdrdd[i][j]), driverLatestArrival[i]));
+					timeConstraints.add(cplex.ge(driverDepartTime[i], driverEarliestDeparture[i]));
+					subConstraints.add(timeConstraints);
 					
-					timeConstraints.add(subTimeConstraints);
-					timeConstraints.add(cplex.eq(x[i][j], 0));
+					paymentConstraints.add(cplex.ge(p[i][j], minPayment[i][j]));
+					paymentConstraints.add(cplex.le(p[i][j], maxPayment[i][j]));
+					subConstraints.add(paymentConstraints);
 					
-					cplex.add(timeConstraints);
+					constraints.add(subConstraints);
+					constraints.add(cplex.and(cplex.eq(x[i][j], 0), cplex.eq(p[i][j], 0.0)));
+					
+					cplex.add(constraints);
 				}
 			}
 			
@@ -227,35 +240,29 @@ public class Optimiser {
 			 * the driver-rider pair most preferred to each other do not get matched by the system.
 			 * Sum of total blocks and x[i][j] must sum to at least 1 for time feasible and distance feasible solutions
 			 */
-			for (int i = 0; i < nDrivers; i++) {
-				for (int j = 0; j < nRiders; j++) {
-					ArrayList<Integer> driverBlock = Block.calcDriverBlock(i, j, todor, tordr, tdrdd, toddd, nRiders);
-					ArrayList<Integer> riderBlock = Block.calcRiderBlock(i, j, todor, tordr, tdrdd, toddd, nDrivers);
-					IloLinearIntExpr sumBlocks = cplex.linearIntExpr();
-					int distanceInfeasibility = 0;
-					int timeIncompatibility = 0;
-					
-					for (int k = 0; k < driverBlock.size(); k++) 
-						sumBlocks.addTerm(1, x[i][driverBlock.get(k)]);
-					for (int l = 0; l < riderBlock.size(); l++)
-						sumBlocks.addTerm(1, x[riderBlock.get(l)][j]);
-					
-					// Equals 1 if incompatible - for distance, incompatible if negative distance savings; for time, incompatible if timings do not match
-					distanceInfeasibility = Block.calcDistFeasibility(i, j, rideshareDistance, odDrivers, odRiders);
-					timeIncompatibility = Block.calcTimeIncompatibility(i, j, todor, tordr, tdrdd, driverAnnouncements, riderAnnouncements);
-					
-					// Adds blocking constraints for all distance and time compatible blocks
-					if (distanceInfeasibility == 0 && timeIncompatibility == 0)
-						cplex.addGe(cplex.sum(sumBlocks, x[i][j]), 1);
-				}
-			}
-			
-			/*
-			 * Ridesharing Payment Constraints
-			 * Ridesharing is only feasible if the p[i][j] > minPayment[i][j] && p[i][j] < maxPayment[i][j]. In other words, the proposed ridesharing
-			 * payment must benefit both the driver and the rider
-			 */
-
+//			for (int i = 0; i < nDrivers; i++) {
+//				for (int j = 0; j < nRiders; j++) {
+//					ArrayList<Integer> driverBlock = Block.calcDriverBlock(i, j, todor, tordr, tdrdd, toddd, nRiders);
+//					ArrayList<Integer> riderBlock = Block.calcRiderBlock(i, j, todor, tordr, tdrdd, toddd, nDrivers);
+//					IloLinearIntExpr sumBlocks = cplex.linearIntExpr();
+//					int distanceInfeasibility = 0;
+//					int timeIncompatibility = 0;
+//					
+//					for (int k = 0; k < driverBlock.size(); k++) 
+//						sumBlocks.addTerm(1, x[i][driverBlock.get(k)]);
+//					for (int l = 0; l < riderBlock.size(); l++)
+//						sumBlocks.addTerm(1, x[riderBlock.get(l)][j]);
+//					
+//					// Equals 1 if incompatible - for distance, incompatible if negative distance savings; for time, incompatible if timings do not match
+//					distanceInfeasibility = Block.calcDistFeasibility(i, j, rideshareDistance, odDrivers, odRiders);
+//					timeIncompatibility = Block.calcTimeIncompatibility(i, j, todor, tordr, tdrdd, driverAnnouncements, riderAnnouncements);
+//					
+//					// Adds blocking constraints for all distance and time compatible blocks
+//					if (distanceInfeasibility == 0 && timeIncompatibility == 0)
+//						cplex.addGe(cplex.sum(sumBlocks, x[i][j]), 1);
+//				}
+//			}
+//			
 
 // *** Solving and printing solutions ***
 			if (cplex.solve()) {
@@ -282,7 +289,7 @@ public class Optimiser {
 				System.out.println();
 				for (int i = 0; i < nDrivers; i++) {
 					for (int j = 0; j < nRiders; j++) {
-						// System.out.print(cplex.getValue(p[i][j]) + " ");
+						System.out.print(cplex.getValue(p[i][j]) + " ");
 					}
 					System.out.println();
 				}

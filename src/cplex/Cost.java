@@ -131,4 +131,17 @@ public class Cost {
 		}
 		return maxPayment;
 	}
+	
+	public static int[][] generateFeasiblePaymentMatches(double[][] minPayment, double[][] maxPayment, int nDrivers, int nRiders) {
+		int[][] matrix = new int[nDrivers][nRiders];
+		for (int i = 0; i < nDrivers; i++) {
+			for (int j = 0; j < nRiders; j++) {
+				if (minPayment[i][j] <= maxPayment[i][j])
+					matrix[i][j] = 1;
+				else
+					matrix[i][j] = 0;
+			}
+		}
+		return matrix;
+	}
 }
