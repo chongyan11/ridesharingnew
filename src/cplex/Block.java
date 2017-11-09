@@ -61,9 +61,29 @@ public class Block {
 		else 
 			return 0;
 	}
+	
+	public static ArrayList<Integer> calcDriverBlock(double[][] maxPayment, int nRiders, int driver, int rider) {
+		ArrayList<Integer> blocks = new ArrayList<Integer>();
+		double thisPairMaxPayment = maxPayment[driver][rider];
+		for (int i = 0; i < nRiders; i++) {
+			if (thisPairMaxPayment < maxPayment[driver][i])
+				blocks.add(i);
+		}
+		return blocks;
+	}
+	
+	public static ArrayList<Integer> calcRiderBlock(double[][] minPayment, int nDrivers, int driver, int rider) {
+		ArrayList<Integer> blocks = new ArrayList<Integer>();
+		double thisPairMinPayment = minPayment[driver][rider];
+		for (int i = 0; i < nDrivers; i++) {
+			if (thisPairMinPayment > minPayment[i][rider])
+				blocks.add(i);
+		}
+		return blocks;
+	}
 }
 
-/*
+/* Old Data
  * 	public static double[][] distances = {{0.0, 2.5, 2.1, 15.4, 16.4, 19.4}, 
 	                                      {2.5, 0.0, 2.6, 17.1, 18.1 ,18.8},
 	                                      {2.1, 2.6, 0.0, 17.6, 18.2, 20.8},
