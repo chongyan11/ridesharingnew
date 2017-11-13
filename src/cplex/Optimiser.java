@@ -12,24 +12,27 @@ import java.nio.file.NoSuchFileException;
 public class Optimiser {
 	private static final int TEST_NUM = 2;
 	public static void main(String[] args) {
-		ArrayList<String> rawData = readData();
-		Data.processData(rawData);
-		model();
-	}
-	
-	public static ArrayList<String> readData() {
 		try {
-			String fileName = ReadInput.getFileName(TEST_NUM);
-			ArrayList<String> rawData = new ArrayList<String>();
-			if (ReadInput.checkPath(fileName))
-				rawData = ReadInput.readFile(fileName);
-			return rawData;
+			Information info = InputOutput.readBackground();
+			Data.numNodes = info.numNodes;
+			Data.times = info.times;
+			Data.distances = info.distances;
+			ArrayList<String> rawData = readData();
+			Data.processData(rawData);
+			model();
 		} catch (NoSuchFileException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		return null;
+	}
+	
+	public static ArrayList<String> readData() throws NoSuchFileException, IOException{
+		String fileName = InputOutput.getFileName(TEST_NUM);
+		ArrayList<String> rawData = new ArrayList<String>();
+		if (InputOutput.checkPath(fileName))
+			rawData = InputOutput.readFile(fileName);
+		return rawData;
 	}
 	
 	public static void model() {
