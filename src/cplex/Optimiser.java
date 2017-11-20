@@ -10,32 +10,34 @@ import java.math.*;
 import java.nio.file.NoSuchFileException;
 
 public class Optimiser {
-	private static final int TEST_NUM = 2;
-	public static void main(String[] args) {
-		try {
-			Information info = InputOutput.readBackground();
-			Data.numNodes = info.numNodes;
-			Data.times = info.times;
-			Data.distances = info.distances;
-			ArrayList<String> rawData = readData();
-			Data.processData(rawData);
-			model();
-		} catch (NoSuchFileException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+	
+	// for testing only
+	// private static final int TEST_NUM = 2;
+	
+	private ArrayList<Integer> matchedParticipantList = new ArrayList<Integer>();
+	private ArrayList<Pair> soloParticipantList = new ArrayList<Pair>();
+	private Double ridesharingPayments = 0.0;
+	
+	public void run(String fileName) throws NoSuchFileException, IOException {
+		Information info = InputOutput.readBackground();
+		Data.numNodes = info.numNodes;
+		Data.times = info.times;
+		Data.distances = info.distances;
+		ArrayList<String> rawData = readData(fileName);
+		Data.processData(rawData);
+		model();
 	}
 	
-	public static ArrayList<String> readData() throws NoSuchFileException, IOException{
-		String fileName = InputOutput.getFileName(TEST_NUM);
+	// TODO: Edit this function to fit the new requirements
+	public ArrayList<String> readData(String fileName) throws NoSuchFileException, IOException{
+		// String fileName = InputOutput.getFileName(TEST_NUM);
 		ArrayList<String> rawData = new ArrayList<String>();
 		if (InputOutput.checkPath(fileName))
 			rawData = InputOutput.readFile(fileName);
 		return rawData;
 	}
 	
-	public static void model() {
+	public void model() {
 		try {						
 			// Setting Up All Required Information
 			IloCplex cplex = new IloCplex();
@@ -275,27 +277,43 @@ public class Optimiser {
 				System.out.println("Total Vehicle KM: " + cplex.getObjValue());
 				System.out.println();
 				for (int i = 0; i < nDrivers; i++) 
-					for (int j = 0; j < nRiders; j++) 
-						if ((int) cplex.getValue(x[i][j]) == 1)
-							System.out.println("Driver " + (i+1) + " matched with Rider " + (j+1));
+					for (int j = 0; j < nRiders; j++) {
+						if ((int) cplex.getValue(x[i][j]) == 1) {
+							System.out.println("Driver " + driverAnnouncements.get(i).id + "(" + (i+1) + ")" + 
+									" matched with Rider " + riderAnnouncements.get(j).id + "(" + (j+1) + ")");
+							matchedParticipantList.add(driverAnnouncements.get(i).id);
+							matchedParticipantList.add(riderAnnouncements.get(j).id);
+						}
+					}
 				System.out.println();
 				for (int i = 0; i < nDrivers; i++)
-					if ((int) cplex.getValue(y[i]) == 1)
-						System.out.println("Driver " + (i+1) + " leaves alone");
+					if ((int) cplex.getValue(y[i]) == 1) {
+						System.out.println("Driver " + driverAnnouncements.get(i).id + " leaves alone");
+						Pair pair = new Pair();
+						pair.id = driverAnnouncements.get(i).id;
+						pair.departTime = cplex.getValue(driverDepartTime[i]);
+						soloParticipantList.add(pair);
+					}
 				System.out.println();
 				for (int j = 0; j < nRiders; j++)
-					if((int) cplex.getValue(w[j]) == 1)
-						System.out.println("Rider " + (j+1) + " leaves alone");
+					if((int) cplex.getValue(w[j]) == 1) {
+						System.out.println("Rider " + riderAnnouncements.get(j).id + " leaves alone");
+						Pair pair = new Pair();
+						pair.id = riderAnnouncements.get(j).id;
+						pair.departTime = cplex.getValue(riderDepartTime[j]);
+						soloParticipantList.add(pair);
+					}
 				System.out.println();;
 				for (int i = 0; i < nDrivers; i++) 
-					System.out.println("Driver " + (i+1) + " leaves at " + cplex.getValue(driverDepartTime[i]));
+					System.out.println("Driver " + driverAnnouncements.get(i).id + " leaves at " + cplex.getValue(driverDepartTime[i]));
 				System.out.println();
 				for (int j = 0; j < nRiders; j++) 
-					System.out.println("Riders " + (j+1) + " leaves at " + cplex.getValue(riderDepartTime[j]));
+					System.out.println("Riders " + riderAnnouncements.get(j).id + " leaves at " + cplex.getValue(riderDepartTime[j]));
 				System.out.println();
 				for (int i = 0; i < nDrivers; i++) {
 					for (int j = 0; j < nRiders; j++) {
 						System.out.print(cplex.getValue(p[i][j]) + " ");
+						ridesharingPayments += cplex.getValue(p[i][j]);
 					}
 					System.out.println();
 				}
@@ -309,7 +327,7 @@ public class Optimiser {
 	
 	
 // *** Functions called in the main model *** 
-	public static void categorise(ArrayList<TripAnnouncement> driverAnnouncements, ArrayList<TripAnnouncement> riderAnnouncements) {
+	public void categorise(ArrayList<TripAnnouncement> driverAnnouncements, ArrayList<TripAnnouncement> riderAnnouncements) {
 		for (int i = 0; i < Data.numAnnouncements; i++) {
 			if (Data.tripAnnouncements.get(i).type == 1) {
 				driverAnnouncements.add(Data.tripAnnouncements.get(i));
@@ -321,7 +339,7 @@ public class Optimiser {
 	}
 	
 	
-	public static void generateDistances(ArrayList<TripAnnouncement> driverAnnouncements, ArrayList<TripAnnouncement> riderAnnouncements,
+	public void generateDistances(ArrayList<TripAnnouncement> driverAnnouncements, ArrayList<TripAnnouncement> riderAnnouncements,
 			double[][] oo, double[][] dd, double[] odDrivers, double[] odRiders, int numDrivers, int numRiders) {
 		for (int i = 0; i < numDrivers; i++) {
 			for (int j = 0; j < numRiders; j++) {
@@ -333,8 +351,8 @@ public class Optimiser {
 		}
 		return;
 	}
-	
-	public static void generateRideShareDistance(double[][] c, double[][] oo, double[][] dd, double[] odRiders, int numDrivers, int numRiders) {
+
+	public void generateRideShareDistance(double[][] c, double[][] oo, double[][] dd, double[] odRiders, int numDrivers, int numRiders) {
 		for (int i = 0; i < numDrivers; i++) {
 			for (int j = 0; j < numRiders; j++) {
 				c[i][j] = oo[i][j] + dd[i][j] + odRiders[j];
@@ -345,7 +363,7 @@ public class Optimiser {
 		return;
 	}
 	
-	public static void generateTravelTime(ArrayList<TripAnnouncement> driverAnnouncements, ArrayList<TripAnnouncement> riderAnnouncements, 
+	public void generateTravelTime(ArrayList<TripAnnouncement> driverAnnouncements, ArrayList<TripAnnouncement> riderAnnouncements, 
 			double[][] todor, double[] tordr, double[][] tdrdd, double[] toddd, int numDrivers, int numRiders) {
 		for (int i = 0; i < numDrivers; i++) {
 			for (int j = 0; j < numRiders; j++) {
@@ -357,7 +375,7 @@ public class Optimiser {
 		}
 	}
 	
-	public static void generateTimeMatrix(ArrayList<TripAnnouncement> list, Boolean isLatest, double[] timeList) {
+	public void generateTimeMatrix(ArrayList<TripAnnouncement> list, Boolean isLatest, double[] timeList) {
 		if (isLatest) {
 			for (int i = 0; i < list.size(); i++) {
 				timeList[i] = list.get(i).lateTime;
@@ -370,7 +388,7 @@ public class Optimiser {
 		return;
 	}
 	
-	public static int[] generateLocationSet(ArrayList<TripAnnouncement> list, Boolean isOrigin) {
+	public int[] generateLocationSet(ArrayList<TripAnnouncement> list, Boolean isOrigin) {
 		int[] locationList = new int[list.size()];
 		for (int i = 0; i < list.size(); i++) {
 			if (isOrigin)
@@ -379,5 +397,17 @@ public class Optimiser {
 				locationList[i] = list.get(i).destination;
 		}
 		return locationList;
+	}
+	
+	public ArrayList<Integer> getMatchedParticipants() {
+		return matchedParticipantList;
+	}
+	
+	public ArrayList<Pair> getSoloParticipants() {
+		return soloParticipantList;
+	}
+	
+	public Double getRidesharingPayments() {
+		return ridesharingPayments;
 	}
 }
