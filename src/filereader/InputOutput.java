@@ -16,7 +16,6 @@ import java.util.ArrayList;
 public class InputOutput {
 	private static final String INPUT_FILE_NAME = "test.csv";
 	private static final String BG_FILE_NAME = "nodes.csv";
-	private static final String SIMULATION_PARTICIPANTS_FILE_NAME = "participants.csv";
 	
 	public static String getFileName(Integer i) {
 		String testNum = i.toString();
@@ -82,8 +81,8 @@ public class InputOutput {
 		return in;
 	}
 	
-	public static void writeList(int[][] list, int length, int breadth) throws IOException {
-		PrintWriter pw = new PrintWriter(new FileWriter(SIMULATION_PARTICIPANTS_FILE_NAME));
+	public static void writeList(int[][] list, int length, int breadth, String filename) throws IOException {
+		PrintWriter pw = new PrintWriter(new FileWriter(filename));
 		for (int i = 0; i < length; i++) {
 			String line = String.valueOf(list[i][0]);
 			for (int j = 1; j < breadth; j++) {
