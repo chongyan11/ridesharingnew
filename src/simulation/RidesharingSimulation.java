@@ -54,7 +54,7 @@ public class RidesharingSimulation{
 	
 	// runs optimisation at fixed intervals, called by run()
 	private void runSimulation() throws IOException, NoSuchFileException {
-//		while (!optTimeList.isEmpty()) {
+		while (!optTimeList.isEmpty()) {
 			OptimisationEvent oe = createOptimisationEvent(optTimeList.get(0));
 			oe.runOptimisation();
 			currentTime = optTimeList.get(0);
@@ -62,7 +62,7 @@ public class RidesharingSimulation{
 			totalRidesharingPayments += oe.getPayments();
 			numMatches += oe.getMatchedParticipants().size();
 			updateList(oe);
-//		}
+		}
 	}
 	
 	// creates OptimisationEvent object for each and every optimisation run, called by runSimulation();
@@ -154,14 +154,9 @@ public class RidesharingSimulation{
 				}
 			}
 		}
-		System.out.println(fullList.size());
 	}
-/* 	
- * TODO: 
- * 1) Schedule a series of Optimisation Events
- * 2) Variables to keep track of number of participants matched and unmatched
- * 3) Random generation of new participants
- * 4) Method to update the list of announcements when (1) participants are matched (2) announcement expires
+
+/* TODO:	
  * 5) Method to calculate total system mileage (cannot simply take the figures obtained from optimiser)
  */
 }
