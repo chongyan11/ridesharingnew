@@ -10,9 +10,10 @@ import cplex.Optimiser;
 public class OptimisationEvent {
 	private int eventTime;
 	private double ridesharingPayments;
+	private double distanceSaved;
 	private String fileName;
 	private ArrayList<Integer> matchedParticipants;
-	private ArrayList<Pair> soloParticipants;
+	private ArrayList<Integer> soloParticipants;
 		
 	public OptimisationEvent(int eventTime) {
 		this.eventTime = eventTime;
@@ -26,8 +27,12 @@ public class OptimisationEvent {
 		return matchedParticipants;
 	}
 	
-	public ArrayList<Pair> getSoloParticipants() {
+	public ArrayList<Integer> getSoloParticipants() {
 		return soloParticipants;
+	}
+	
+	public double getDistanceSaved() {
+		return distanceSaved;
 	}
 	
 	public void setFileName(String fileName) {
@@ -35,10 +40,10 @@ public class OptimisationEvent {
 	}
 	
 	public void runOptimisation() throws NoSuchFileException, IOException{
-		Optimiser model = new Optimiser();
-		model.run(fileName);
-		matchedParticipants = model.getMatchedParticipants();
-		soloParticipants = model.getSoloParticipants();
-		ridesharingPayments = model.getRidesharingPayments();
+		Optimiser.run(fileName);
+		matchedParticipants = Optimiser.getMatchedParticipants();
+		soloParticipants = Optimiser.getSoloParticipants();
+		ridesharingPayments = Optimiser.getRidesharingPayments();
+		distanceSaved = Optimiser.getDistanceSaved();
 	}
 }

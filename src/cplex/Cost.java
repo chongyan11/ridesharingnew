@@ -144,4 +144,14 @@ public class Cost {
 		}
 		return matrix;
 	}
+	
+	public static double[][] generateCostSavingsMatrix(double[] soloDriverTotalCost, double[] soloRiderTotalCost, double[][] shareDriverTotalCost, int nDrivers, int nRiders) {
+		double[][] matrix = new double[nDrivers][nRiders];
+		for (int i = 0; i < nDrivers; i++) {
+			for (int j = 0; j < nRiders; j++) {
+				matrix[i][j] = soloDriverTotalCost[i] + soloRiderTotalCost[j] - shareDriverTotalCost[i][j];
+			}
+		}
+		return matrix;
+	}
 }

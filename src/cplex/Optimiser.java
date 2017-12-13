@@ -14,11 +14,17 @@ public class Optimiser {
 	// for testing only
 	// private static final int TEST_NUM = 2;
 	
-	private ArrayList<Integer> matchedParticipantList = new ArrayList<Integer>();
-	private ArrayList<Pair> soloParticipantList = new ArrayList<Pair>();
-	private Double ridesharingPayments = 0.0;
+	private static ArrayList<Integer> matchedParticipantList = new ArrayList<Integer>();
+	private static ArrayList<Integer> soloParticipantList = new ArrayList<Integer>();
+	private static Double ridesharingPayments = 0.0;
+	private static Double distanceSaved = 0.0;
+	private static int[][] matches;
 	
-	public void run(String fileName) throws NoSuchFileException, IOException {
+	public static void run(String fileName) throws NoSuchFileException, IOException {
+		matchedParticipantList.clear();
+		soloParticipantList.clear();
+		ridesharingPayments = 0.0;
+		distanceSaved = 0.0;
 		Information info = InputOutput.readBackground();
 		Data.numNodes = info.numNodes;
 		Data.times = info.times;
@@ -29,7 +35,7 @@ public class Optimiser {
 	}
 	
 	// TODO: Edit this function to fit the new requirements
-	public ArrayList<String> readData(String fileName) throws NoSuchFileException, IOException{
+	private static ArrayList<String> readData(String fileName) throws NoSuchFileException, IOException{
 		// String fileName = InputOutput.getFileName(TEST_NUM);
 		ArrayList<String> rawData = new ArrayList<String>();
 		if (InputOutput.checkPath(fileName))
@@ -37,13 +43,12 @@ public class Optimiser {
 		return rawData;
 	}
 	
-	public void model() {
+	private static void model() {
 		try {						
 			// Setting Up All Required Information
 			IloCplex cplex = new IloCplex();
 			ArrayList<TripAnnouncement> driverAnnouncements = new ArrayList<TripAnnouncement>();
 			ArrayList<TripAnnouncement> riderAnnouncements = new ArrayList<TripAnnouncement>();
-			// Data.setList();
 			categorise(driverAnnouncements, riderAnnouncements);
 			
 			int nDrivers = driverAnnouncements.size();
@@ -57,6 +62,8 @@ public class Optimiser {
 			double odDrivers[] = new double [nDrivers];
 			double odRiders[] = new double[nRiders];
 			double rideshareDistance[][] = new double [nDrivers][nRiders];
+			double distanceSavings[][] = new double[nDrivers][nRiders];
+			double maxSystemMileage;
 			
 			// Time variables
 			double todor[][] = new double[nDrivers][nRiders];
@@ -81,6 +88,7 @@ public class Optimiser {
 			double shareDriverTotalCost[][] = new double[nDrivers][nRiders];
 			double minPayment[][] = new double[nDrivers][nRiders];
 			double maxPayment[][] = new double[nDrivers][nRiders];
+			double costSavings[][] = new double[nDrivers][nRiders];
 			// double shareRider[][] = new double[nDrivers][nRiders];	- same as solo rider due to assumptions
 			int feasiblePaymentMatches[][] = new int[nDrivers][nRiders];
 			
@@ -90,9 +98,10 @@ public class Optimiser {
 			int riderOrigins[] = new int[nRiders];
 			int riderDestinations[] = new int[nRiders];
 			
-// ** TODO: Create assert function to check numNodes = dimensions of the distance matrix
 			generateDistances(driverAnnouncements, riderAnnouncements, oo, dd, odDrivers, odRiders, nDrivers, nRiders);
 			generateRideShareDistance(rideshareDistance, oo, dd, odRiders, nDrivers, nRiders);
+			distanceSavings = generateDistanceSavings(rideshareDistance, odDrivers, odRiders, nDrivers, nRiders);
+			maxSystemMileage = generateMaxMileage(odDrivers, odRiders, nDrivers, nRiders);
 			generateTravelTime(driverAnnouncements, riderAnnouncements, todor, tordr, tdrdd, toddd, nDrivers, nRiders);
 			generateTimeMatrix(driverAnnouncements, Boolean.FALSE, driverEarliestDeparture);
 			generateTimeMatrix(driverAnnouncements, Boolean.TRUE, driverLatestArrival);
@@ -117,208 +126,168 @@ public class Optimiser {
 			minPayment = Cost.generateMinRidesharingPayment(shareDriverTotalCost, soloDriverTotalCost, nDrivers, nRiders);
 			maxPayment = Cost.generateMaxRidesharingPayment(soloRiderF, nDrivers, nRiders);	// at this point, max ridesharing fare = taxi fare
 			feasiblePaymentMatches = Cost.generateFeasiblePaymentMatches(minPayment, maxPayment, nDrivers, nRiders);
+			costSavings = Cost.generateCostSavingsMatrix(soloDriverTotalCost, soloRiderTotalCost, shareDriverTotalCost, nDrivers, nRiders);
 			
 // *** Decision Variables ***
-			IloIntVar[][] x = new IloIntVar[nDrivers][];	// DVAR: rideshare array (i.e. value of 1 indicates driver i matched with rider j) 
-			// method to instantiate 2D array
-			for (int i = 0; i < nDrivers; i++) {
-				x[i] = cplex.intVarArray(nRiders, 0, 1);	// matching matrix - each row of x is an integer array of size equal to number of riders, limited from 0 to 1
-			}
-			IloIntVar[] y = cplex.intVarArray(nDrivers, 0, 1);	// DVAR: solo driver array (i.e. value of 1 indicates driver i is driving alone)
-			IloIntVar[] w = cplex.intVarArray(nRiders, 0, 1);		// DVAR: solo rider array (i.e. value of 1 indicates rider j is traveling alone)	
-			IloNumVar[] driverDepartTime = cplex.numVarArray(nDrivers, 0, Double.MAX_VALUE);	// DVAR: scheduled departure times for drivers
-			IloNumVar[] riderDepartTime = cplex.numVarArray(nRiders, 0, Double.MAX_VALUE);	// DVAR: scheduled departure time for riders
 			
-			IloNumVar[][] p = new IloNumVar[nDrivers][];	// DVAR: amount of ridesharing payment rider j pays to driver i if matched (i.e. x[i][j] == 1)
+			// 1: rideshare array (i.e. value of 1 indicates driver i matched with rider j)
+			IloIntVar[][] x = new IloIntVar[nDrivers][];	 
+			for (int i = 0; i < nDrivers; i++) {
+				// matching matrix - each row of x is an integer array of size equal to number of riders, limited from 0 to 1
+				x[i] = cplex.intVarArray(nRiders, 0, 1);	
+			}
+			
+			// 2: driver departure time
+			IloNumVar[] driverDepartTime = cplex.numVarArray(nDrivers, 0, Double.MAX_VALUE);
+			
+			// 3: rider departure time
+			IloNumVar[] riderDepartTime = cplex.numVarArray(nRiders, 0, Double.MAX_VALUE);
+			
+			// 4: ridesharing payment from rider to driver if x[i][j] == 1
+			IloNumVar[][] p = new IloNumVar[nDrivers][];
 			for (int i = 0; i < nDrivers; i++) {
 				p[i] = cplex.numVarArray(nRiders, 0.0, Double.MAX_VALUE);
 			}
 			
-			IloLinearIntExpr[] horizontalSum = new IloLinearIntExpr[nDrivers];
-			IloLinearIntExpr[] verticalSum = new IloLinearIntExpr[nRiders];
+// *** Setting Up Objective Function ***
 			
-			// Horizontal sum is to ensure that each driver only has one match (i.e. Sum to 1)
+			// Objective: Maximise distance saved due to ridesharing
+			IloLinearNumExpr objective = cplex.linearNumExpr();
+			for (int i = 0; i < nDrivers; i++) {
+				for (int j = 0; j < nRiders; j++) {
+					objective.addTerm(distanceSavings[i][j], x[i][j]);
+				}
+			}
+			cplex.addMaximize(objective);
+			
+// *** Setting Up Constraints ***
+			
+			/*
+			 * Determine feasibility of each pairing: x[i][j] == 0 if matching is infeasible
+			 * Checks for feasibility under 3 conditions:
+			 * 1. Distance feasibility: Total rideshare distance must not exceed sum of individual travel distances
+			 * 2. Time feasibility: Both driver and rider must not violate their ET and LT respectively
+			 * 3. Cost feasibility: Driver must receive a worthwhile compensation while Rider pays less than solo travel
+			 */
+			
+			int[][] feasibleMatching = new int[nDrivers][nRiders];
+			
+			for (int i = 0; i < nDrivers; i++) {
+				for (int j = 0; j < nRiders; j++) {
+					int distanceInfeasibility = Block.calcDistFeasibility(i, j, rideshareDistance, odDrivers, odRiders);
+					int timeInfeasibility = Block.calcTimeIncompatibility(i, j, todor, tordr, tdrdd, driverAnnouncements, riderAnnouncements);
+					int costFeasibility = feasiblePaymentMatches[i][j];
+					if (distanceInfeasibility == 0 && timeInfeasibility == 0 && costFeasibility == 1) {
+						feasibleMatching[i][j] = 1;
+					} else {
+						feasibleMatching[i][j] = 0;
+					}
+				}
+			}
+			
+			for (int i = 0; i < nDrivers; i++) {
+				for (int j = 0; j < nRiders; j++) {
+					IloAnd matchConstraints = cplex.and();
+					IloAnd nomatchConstraints = cplex.and();
+					nomatchConstraints.add(cplex.eq(x[i][j], 0));
+					nomatchConstraints.add(cplex.eq(p[i][j], 0.0));
+					
+					if (feasibleMatching[i][j] == 0) {
+						cplex.add(nomatchConstraints);
+					} 
+					else {	
+						IloOr feasibleConstraints = cplex.or();
+						/*
+						 * Add Blocking Constraints
+						 * Blocking constraints ensure user equilibrium. Most preferred participant has to be matched in order to fulfil conditions
+						 */
+						ArrayList<Integer> driverBlock = Block.calcDriverBlock(maxPayment, nRiders, i, j);
+						ArrayList<Integer> riderBlock = Block.calcRiderBlock(minPayment, nDrivers, i, j);
+						IloLinearIntExpr sumBlocks = cplex.linearIntExpr();
+						for (int k = 0; k < driverBlock.size(); k++) {
+							sumBlocks.addTerm(1, x[i][driverBlock.get(k)]);
+						}
+						for (int l = 0; l < riderBlock.size(); l++) {
+							sumBlocks.addTerm(1, x[riderBlock.get(l)][j]);
+						}
+						matchConstraints.add(cplex.ge(cplex.sum(sumBlocks, x[i][j]), 1, "Constraint 18"));
+						
+						/*
+						 * Add Time Constraints
+						 * Driver must leave after earliest departure, arrive at rider's origin after rider's earliest departure
+						 * Must arrive at rider's destination before rider's latest arrival time
+						 * Driver must arrive at driver's destination before driver's latest arrival time
+						 */
+						matchConstraints.add(cplex.ge(cplex.sum(driverDepartTime[i], todor[i][j]), riderEarliestDeparture[j], "Constraint 1"));
+						matchConstraints.add(cplex.le(cplex.sum(cplex.sum(driverDepartTime[i], todor[i][j]), tordr[j]), riderLatestArrival[j], "Constraint 2"));
+						matchConstraints.add(cplex.le(cplex.sum(cplex.sum(cplex.sum(driverDepartTime[i], todor[i][j]), tordr[j]), tdrdd[i][j]), driverLatestArrival[i], "Constraint 3"));
+						matchConstraints.add(cplex.eq(riderDepartTime[j], cplex.sum(driverDepartTime[i], todor[i][j]), "Constraint 14"));
+						
+						/*
+						 * Add Payment Constraints
+						 * Ridesharing payments must be between minimum driver is willing to receive and maximum that rider is willing to pay
+						 * 
+						 * In this iteration, payment is set as the middle value between minimum and maximum payments
+						 */
+						matchConstraints.add(cplex.ge(p[i][j], minPayment[i][j], "Constraint 5"));
+						matchConstraints.add(cplex.le(p[i][j], maxPayment[i][j], "Constraint 6"));
+						matchConstraints.add(cplex.eq(p[i][j], (0.5 * (minPayment[i][j] + maxPayment[i][j])), "Constraint 7"));
+						
+						/*
+						 * Adding matchConstraints into cplex solver
+						 */
+						feasibleConstraints.add(matchConstraints);
+						feasibleConstraints.add(nomatchConstraints);
+						cplex.add(feasibleConstraints);
+					}
+				}
+			}
+			
+			/*
+			 * Add generic constraints.
+			 * 1. Each rider can only have 1 driver from Origin to Destination
+			 * 2. Each driver can only have 1 rider from Origin to Destination
+			 */
+			IloLinearIntExpr[] horizontalSum = new IloLinearIntExpr[nDrivers];
 			for (int i = 0; i < nDrivers; i++) {
 				horizontalSum[i] = cplex.linearIntExpr();
 				for (int j = 0; j < nRiders; j++) {
 					horizontalSum[i].addTerm(1, x[i][j]);
 				}
-				horizontalSum[i].addTerm(1, y[i]);
+				cplex.addLe(horizontalSum[i], 1.1);
 			}
 			
-			// Vertical sum is to ensure that each rider only has one match (i.e. Sum to 1)
+			IloLinearIntExpr[] verticalSum = new IloLinearIntExpr[nRiders];
 			for (int j = 0; j < nRiders; j++) {
 				verticalSum[j] = cplex.linearIntExpr();
 				for (int i = 0; i < nDrivers; i++) {
 					verticalSum[j].addTerm(1, x[i][j]);
 				}
-				verticalSum[j].addTerm(1, w[j]);
-			}
-			
-// *** Setting Up Objective Function ***
-			IloLinearNumExpr objective = cplex.linearNumExpr();
-			for (int i = 0; i < nDrivers; i++) {
-				for (int j = 0; j < nRiders; j++) {
-					objective.addTerm(rideshareDistance[i][j], x[i][j]);
-				}
-				objective.addTerm(odDrivers[i], y[i]);
-			}
-			for (int j = 0; j < nRiders; j++) {
-				objective.addTerm(odRiders[j], w[j]);
-			}
-			cplex.addMinimize(objective);
-			
-// *** Setting Up Constraints ***
-			
-			/*
-			 * Time Constraints for matched participants
-			 * To ensure convexity, while only restricting this constraint to matched participants, IloOr object was invoked.
-			 * Generally, if the time constraints relating to driver departure, rider departure, rider arrival, driver arrival
-			 * cannot be met, then x[i][j] will be constrained to 0 (i.e. no match).
-			 * 
-			 * Ridesharing Payment Constraints for matched participants	(REMOVE TO CONSIDER CASE WITHOUT PRICING STRATEGIES)
-			 * Ridesharing is only feasible if the p[i][j] > minPayment[i][j] && p[i][j] < maxPayment[i][j]. In other words, the proposed ridesharing
-			 * payment must benefit both the driver and the rider
-			 */
-			for (int i = 0; i < nDrivers; i ++) {
-				for (int j = 0; j < nRiders; j++) {
-					IloAnd subConstraints = cplex.and();
-					IloAnd timeConstraints = cplex.and();
-					IloAnd paymentConstraints = cplex.and();
-					IloOr constraints = cplex.or();
-					
-					timeConstraints.add(cplex.ge(cplex.sum(driverDepartTime[i], todor[i][j]), riderEarliestDeparture[j]));
-					timeConstraints.add(cplex.le(cplex.sum(cplex.sum(driverDepartTime[i], todor[i][j]), tordr[j]), riderLatestArrival[j]));
-					timeConstraints.add(cplex.le(cplex.sum(cplex.sum(cplex.sum(driverDepartTime[i], todor[i][j]), tordr[j]), tdrdd[i][j]), driverLatestArrival[i]));
-					timeConstraints.add(cplex.ge(driverDepartTime[i], driverEarliestDeparture[i]));
-					subConstraints.add(timeConstraints);
-					
-					paymentConstraints.add(cplex.ge(p[i][j], minPayment[i][j]));
-					paymentConstraints.add(cplex.le(p[i][j], maxPayment[i][j]));
-					paymentConstraints.add(cplex.eq(p[i][j], (0.5 * (minPayment[i][j] + maxPayment[i][j]))));
-					subConstraints.add(paymentConstraints);
-					
-					constraints.add(subConstraints);
-					constraints.add(cplex.and(cplex.eq(x[i][j], 0), cplex.eq(p[i][j], 0.0)));
-					
-					cplex.add(constraints);
-				}
-			}
-			
-			// Time Constraints for solo drivers (general constraint which applies for paired drivers as well)
-			for (int i = 0; i < nDrivers; i++) {
-				cplex.addGe(driverDepartTime[i], driverEarliestDeparture[i]); // Driver leaves after ET(i)
-				cplex.addLe(cplex.sum(driverDepartTime[i], toddd[i]), driverLatestArrival[i]);	// Driver arrives before LT(i)
-			}
-			
-			// Time Constraints for solo riders (general constraint which applies for paired riders as well)
-			for (int j = 0; j < nRiders; j++) {
-				cplex.addGe(riderDepartTime[j], riderEarliestDeparture[j]);	// Rider leaves after ET(j)
-				cplex.addLe(cplex.sum(riderDepartTime[j], tordr[j]), riderLatestArrival[j]);	// Rider arrives before LT(j)
-			}
-						
-			// Create equivalent numbers between riderDepartTime and driverDepartTime + time spent getting from driver origin to rider origin
-			for (int i = 0; i < nDrivers; i++) {
-				for (int j = 0; j < nRiders; j++) {
-					// GENERAL IDEA: IF x[i][j] == 1, THEN riderDepartTime[j] == driverDepartTime[i] + todor[i][j]
-					IloConstraint matchedTime = cplex.eq(riderDepartTime[j], cplex.sum(driverDepartTime[i], todor[i][j]));
-					IloOr matchedRiderTime = cplex.or();
-					matchedRiderTime.add(matchedTime);
-					matchedRiderTime.add(cplex.eq(x[i][j], 0));
-					
-					cplex.add(matchedRiderTime);
-				}
-			}
-			
-			// Constraints for the number of drivers and riders
-			for (int i = 0; i < nDrivers; i++) {
-				cplex.addEq(horizontalSum[i], 1, "Constraint Total Riders per Driver");	// Each driver only has 1 driver at the most, or else go alone
-			}
-			for (int j = 0; j < nRiders; j++) {
-				cplex.addEq(verticalSum[j], 1, "Constraint Total Drivers per Rider");	// Each rider only has 1 driver at the most, or else go alone
-			}
-			
-			/*
-			 * Blocking Constraints	(REMOVE TO OBTAIN RESULT THAT DOES NOT CONSIDER STABLE USER EQUILIBRIUM)
-			 * Prevents blocking from occurring by ensuring that for all drivers and riders, they are matched with their most preferred partner (by cost)
-			 * Algorithm works by considering the type of cases that makes it possible to have a scenario where terms sum to 0 - only where
-			 * the driver-rider pair most preferred to each other do not get matched by the system.
-			 * Sum of total blocks and x[i][j] must sum to at least 1 for time feasible and distance feasible solutions
-			 */
-			for (int i = 0; i < nDrivers; i++) {
-				for (int j = 0; j < nRiders; j++) {
-//					ArrayList<Integer> driverBlock = Block.calcDriverBlock(i, j, todor, tordr, tdrdd, toddd, nRiders);
-//					ArrayList<Integer> riderBlock = Block.calcRiderBlock(i, j, todor, tordr, tdrdd, toddd, nDrivers);
-					ArrayList<Integer> driverBlock = Block.calcDriverBlock(maxPayment, nRiders, i, j);
-					ArrayList<Integer> riderBlock = Block.calcRiderBlock(minPayment, nDrivers, i, j);
-					IloLinearIntExpr sumBlocks = cplex.linearIntExpr();
-					int distanceInfeasibility = 0;
-					int timeIncompatibility = 0;
-					
-					for (int k = 0; k < driverBlock.size(); k++) 
-						sumBlocks.addTerm(1, x[i][driverBlock.get(k)]);
-					for (int l = 0; l < riderBlock.size(); l++)
-						sumBlocks.addTerm(1, x[riderBlock.get(l)][j]);
-					
-					// Equals 1 if incompatible - for distance, incompatible if negative distance savings; for time, incompatible if timings do not match
-					distanceInfeasibility = Block.calcDistFeasibility(i, j, rideshareDistance, odDrivers, odRiders);
-					timeIncompatibility = Block.calcTimeIncompatibility(i, j, todor, tordr, tdrdd, driverAnnouncements, riderAnnouncements);
-					
-					// Adds blocking constraints for all distance and time compatible blocks
-					if (distanceInfeasibility == 0 && timeIncompatibility == 0)
-						if (feasiblePaymentMatches[i][j] == 1)
-							cplex.addGe(cplex.sum(sumBlocks, x[i][j]), 1);
-				}
-			}
-			
+				cplex.addLe(verticalSum[j], 1.1);
+			}	
 
 // *** Solving and printing solutions ***
 			if (cplex.solve()) {
-				System.out.println("Total Vehicle KM: " + cplex.getObjValue());
-				System.out.println();
-				for (int i = 0; i < nDrivers; i++) 
-					for (int j = 0; j < nRiders; j++) {
-						if ((int) cplex.getValue(x[i][j]) == 1) {
-							System.out.println("Driver " + driverAnnouncements.get(i).id + "(" + (i+1) + ")" + 
-									" matched with Rider " + riderAnnouncements.get(j).id + "(" + (j+1) + ")");
-							matchedParticipantList.add(driverAnnouncements.get(i).id);
-							matchedParticipantList.add(riderAnnouncements.get(j).id);
-						}
-					}
-				System.out.println();
-				for (int i = 0; i < nDrivers; i++)
-					if ((int) cplex.getValue(y[i]) == 1) {
-						System.out.println("Driver " + driverAnnouncements.get(i).id + " leaves alone");
-						Pair pair = new Pair();
-						pair.id = driverAnnouncements.get(i).id;
-						pair.departTime = cplex.getValue(driverDepartTime[i]);
-						soloParticipantList.add(pair);
-					}
-				System.out.println();
-				for (int j = 0; j < nRiders; j++)
-					if((int) cplex.getValue(w[j]) == 1) {
-						System.out.println("Rider " + riderAnnouncements.get(j).id + " leaves alone");
-						Pair pair = new Pair();
-						pair.id = riderAnnouncements.get(j).id;
-						pair.departTime = cplex.getValue(riderDepartTime[j]);
-						soloParticipantList.add(pair);
-					}
-				System.out.println();;
-				for (int i = 0; i < nDrivers; i++) 
-					System.out.println("Driver " + driverAnnouncements.get(i).id + " leaves at " + cplex.getValue(driverDepartTime[i]));
-				System.out.println();
-				for (int j = 0; j < nRiders; j++) 
-					System.out.println("Riders " + riderAnnouncements.get(j).id + " leaves at " + cplex.getValue(riderDepartTime[j]));
-				System.out.println();
+				System.out.println("Maximum System Mileage(km): " + maxSystemMileage);
+				System.out.println("Total Distance Savings(km): " + cplex.getObjValue());
+				distanceSaved = cplex.getObjValue();
+				matches = new int[nDrivers][nRiders];
 				for (int i = 0; i < nDrivers; i++) {
 					for (int j = 0; j < nRiders; j++) {
-						System.out.print(cplex.getValue(p[i][j]) + " ");
-						ridesharingPayments += cplex.getValue(p[i][j]);
+						matches[i][j] = (int) cplex.getValue(x[i][j]);
+						System.out.print(matches[i][j] + " ");
+						if (matches[i][j] == 1) {
+							matchedParticipantList.add(driverAnnouncements.get(i).id);
+							matchedParticipantList.add(riderAnnouncements.get(j).id);
+							ridesharingPayments += cplex.getValue(p[i][j]);
+						} else {
+							soloParticipantList.add(driverAnnouncements.get(i).id);
+							soloParticipantList.add(riderAnnouncements.get(j).id);
+						}
 					}
 					System.out.println();
 				}
-			}
-			
+			} 			
 		} catch (IloException e) {
 			e.printStackTrace();
 			System.out.println("infeasible");
@@ -327,7 +296,7 @@ public class Optimiser {
 	
 	
 // *** Functions called in the main model *** 
-	public void categorise(ArrayList<TripAnnouncement> driverAnnouncements, ArrayList<TripAnnouncement> riderAnnouncements) {
+	public static void categorise(ArrayList<TripAnnouncement> driverAnnouncements, ArrayList<TripAnnouncement> riderAnnouncements) {
 		for (int i = 0; i < Data.numAnnouncements; i++) {
 			if (Data.tripAnnouncements.get(i).type == 1) {
 				driverAnnouncements.add(Data.tripAnnouncements.get(i));
@@ -339,7 +308,7 @@ public class Optimiser {
 	}
 	
 	
-	public void generateDistances(ArrayList<TripAnnouncement> driverAnnouncements, ArrayList<TripAnnouncement> riderAnnouncements,
+	private static void generateDistances(ArrayList<TripAnnouncement> driverAnnouncements, ArrayList<TripAnnouncement> riderAnnouncements,
 			double[][] oo, double[][] dd, double[] odDrivers, double[] odRiders, int numDrivers, int numRiders) {
 		for (int i = 0; i < numDrivers; i++) {
 			for (int j = 0; j < numRiders; j++) {
@@ -352,7 +321,7 @@ public class Optimiser {
 		return;
 	}
 
-	public void generateRideShareDistance(double[][] c, double[][] oo, double[][] dd, double[] odRiders, int numDrivers, int numRiders) {
+	private static void generateRideShareDistance(double[][] c, double[][] oo, double[][] dd, double[] odRiders, int numDrivers, int numRiders) {
 		for (int i = 0; i < numDrivers; i++) {
 			for (int j = 0; j < numRiders; j++) {
 				c[i][j] = oo[i][j] + dd[i][j] + odRiders[j];
@@ -363,7 +332,7 @@ public class Optimiser {
 		return;
 	}
 	
-	public void generateTravelTime(ArrayList<TripAnnouncement> driverAnnouncements, ArrayList<TripAnnouncement> riderAnnouncements, 
+	private static void generateTravelTime(ArrayList<TripAnnouncement> driverAnnouncements, ArrayList<TripAnnouncement> riderAnnouncements, 
 			double[][] todor, double[] tordr, double[][] tdrdd, double[] toddd, int numDrivers, int numRiders) {
 		for (int i = 0; i < numDrivers; i++) {
 			for (int j = 0; j < numRiders; j++) {
@@ -375,7 +344,7 @@ public class Optimiser {
 		}
 	}
 	
-	public void generateTimeMatrix(ArrayList<TripAnnouncement> list, Boolean isLatest, double[] timeList) {
+	private static void generateTimeMatrix(ArrayList<TripAnnouncement> list, Boolean isLatest, double[] timeList) {
 		if (isLatest) {
 			for (int i = 0; i < list.size(); i++) {
 				timeList[i] = list.get(i).lateTime;
@@ -388,7 +357,7 @@ public class Optimiser {
 		return;
 	}
 	
-	public int[] generateLocationSet(ArrayList<TripAnnouncement> list, Boolean isOrigin) {
+	private static int[] generateLocationSet(ArrayList<TripAnnouncement> list, Boolean isOrigin) {
 		int[] locationList = new int[list.size()];
 		for (int i = 0; i < list.size(); i++) {
 			if (isOrigin)
@@ -399,15 +368,40 @@ public class Optimiser {
 		return locationList;
 	}
 	
-	public ArrayList<Integer> getMatchedParticipants() {
+	private static double[][] generateDistanceSavings(double[][] rideshareDistance, double[] odDrivers, double[] odRiders, int nDrivers, int nRiders) {
+		double[][] distanceSavings = new double[nDrivers][nRiders];
+		for (int i = 0; i < nDrivers; i++) {
+			for (int j = 0; j < nRiders; j++) {
+				distanceSavings[i][j] = odDrivers[i] + odRiders[j] - rideshareDistance[i][j];
+				// System.out.print(distanceSavings[i][j] + " ");
+			}
+			// System.out.println();
+		}
+		return distanceSavings;
+	}
+	
+	private static double generateMaxMileage(double[] odDrivers, double[] odRiders, int nDrivers, int nRiders) {
+		double sum = 0.0;
+		for (int i = 0; i < nDrivers; i++)
+			sum += odDrivers[i];
+		for (int j = 0; j < nRiders; j++)
+			sum += odRiders[j];
+		return sum;
+	}
+	
+	public static ArrayList<Integer> getMatchedParticipants() {
 		return matchedParticipantList;
 	}
 	
-	public ArrayList<Pair> getSoloParticipants() {
+	public static ArrayList<Integer> getSoloParticipants() {
 		return soloParticipantList;
 	}
 	
-	public Double getRidesharingPayments() {
+	public static Double getRidesharingPayments() {
 		return ridesharingPayments;
+	}
+	
+	public static Double getDistanceSaved() {
+		return distanceSaved;
 	}
 }

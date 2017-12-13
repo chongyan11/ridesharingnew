@@ -28,6 +28,7 @@ public class RidesharingSimulation{
 	private int numMatches = 0;		// number of participants matched
 	private double successRate;	// PERFORMANCE MEASURE: proportion of trip announcements matched
 	private int currentTime = 0;
+	private double distanceSaved = 0.0;
 	
 	private ArrayList<Integer[]> fullList;
 	private ArrayList<Integer> optTimeList;
@@ -45,6 +46,11 @@ public class RidesharingSimulation{
 			writeList(SIMULATION_PARTICIPANTS_FILE_NAME, fullList);	// full list of participants generated at the start will be printed
 			generateOptimisationTimings();
 			runSimulation();
+			successRate = (double) numMatches / totalDemand;
+			System.out.println("Number of successful matches: " + numMatches);
+			System.out.println("Fraction of successful matches: " + successRate);
+			System.out.println("Total ridesharing payments collected: " + totalRidesharingPayments);
+			System.out.println("Total distance saved: " + distanceSaved);
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
@@ -61,6 +67,7 @@ public class RidesharingSimulation{
 			optTimeList.remove(0);
 			totalRidesharingPayments += oe.getPayments();
 			numMatches += oe.getMatchedParticipants().size();
+			distanceSaved += oe.getDistanceSaved();
 			updateList(oe);
 		}
 	}
@@ -137,13 +144,22 @@ public class RidesharingSimulation{
 	}
 	
 	private void updateList(OptimisationEvent oe) {
-		ArrayList<Pair> solo = oe.getSoloParticipants();
+		ArrayList<Integer> solo = oe.getSoloParticipants();
 		ArrayList<Integer> removalList = oe.getMatchedParticipants();
 		
 		// Unmatched participants which are scheduled to leave before the next optimisation run are removed from the list of participants
 		for (int i = 0; i < solo.size(); i++) {
-			if (solo.get(i).departTime < optTimeList.get(0))
-				removalList.add(solo.get(i).id);
+			int latestDeparture = 0;
+			for (int k = 0; k < fullList.size(); k++) {
+				if (fullList.get(k)[SERIAL_NO_INDEX].equals(solo.get(i))) {
+					latestDeparture = fullList.get(k)[DEPARTURE_TIME_INDEX];
+					break;
+				}
+			}
+			if (!optTimeList.isEmpty()) {
+				if (latestDeparture < optTimeList.get(0))
+					removalList.add(solo.get(i));
+			}
 		}
 		
 		// Matched participants are removed from the list of participants
