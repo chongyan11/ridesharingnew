@@ -9,18 +9,13 @@ public class Cost {
 	private static final double RIDER_IC_DISTANCE = 0;
 	
 	private static final double FUEL_UNIT_COST = 0.13377;
-	private static double[] PARKING_DAY_COST = new double[Data.numNodes];
+	private static final double PARKING_DAY_COST = 4.5;
 	
 	private static final double TAXI_BASE = 3.4;
 	private static final double TAXI_DISTANCE_COST = 0.22;
 	private static final double TAXI_DISTANCE_UNIT = 0.4;
 	private static final double TAXI_TIME_COST = 0.22;
 	private static final double TAXI_TIME_UNIT = 0.75;
-	
-	private static void setUpParkCost() {
-		double[] temp = {3.666667, 3.666667, 3.666667, 8, 8, 8};
-		PARKING_DAY_COST = temp;	
-	}
 	
 	public static double[] generateSoloTimeCost(double[] odTime, int n) {
 		double[] soloTC = new double[n];
@@ -32,9 +27,8 @@ public class Cost {
 	
 	public static double[] generateSoloDriverOutOfPocketCost(double[] odDrivers, int nDrivers, int[] driverDestinations) {
 		double[] soloDriverF = new double[nDrivers];
-		setUpParkCost();
 		for (int i = 0; i < nDrivers; i++) {
-			soloDriverF[i] = odDrivers[i] * FUEL_UNIT_COST + PARKING_DAY_COST[driverDestinations[i]-1];
+			soloDriverF[i] = odDrivers[i] * FUEL_UNIT_COST + PARKING_DAY_COST;
 		}
 		return soloDriverF;
 	}
@@ -75,10 +69,9 @@ public class Cost {
 	
 	public static double[][] generateShareDriverOutOfPocketCost(double[][] rideShareDistance, int nDrivers, int nRiders, int[] driverDestinations) {
 		double[][] shareDriverOutOfPocketCost = new double[nDrivers][nRiders];
-		setUpParkCost();
 		for (int i = 0; i < nDrivers; i++) {
 			for (int j = 0; j < nRiders; j++) {
-				shareDriverOutOfPocketCost[i][j] = rideShareDistance[i][j] * FUEL_UNIT_COST + PARKING_DAY_COST[driverDestinations[i]-1];
+				shareDriverOutOfPocketCost[i][j] = rideShareDistance[i][j] * FUEL_UNIT_COST + PARKING_DAY_COST;
 			}
 		}
 		return shareDriverOutOfPocketCost;

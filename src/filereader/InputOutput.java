@@ -15,7 +15,7 @@ import java.util.ArrayList;
 
 public class InputOutput {
 	private static final String INPUT_FILE_NAME = "test.csv";
-	private static final String BG_FILE_NAME = "nodes.csv";
+	private static final String BG_FILE_NAME = "nodeinfo.csv";
 	
 	public static String getFileName(Integer i) {
 		String testNum = i.toString();
@@ -70,13 +70,16 @@ public class InputOutput {
 		int[][] times = new int[numNodes][numNodes];
 		double[][] distances = new double[numNodes][numNodes];
 		for (int i = 0; i < numNodes; i++) {
-			String[] t = timeInfo.get(i).split(", ", numNodes);
-			String[] s = distanceInfo.get(i).split(", ", numNodes);
+			String[] t = timeInfo.get(i).split(",", numNodes);
+			String[] s = distanceInfo.get(i).split(",", numNodes);
 			for (int j = 0; j < numNodes; j++) {
-				times[i][j] = Integer.parseInt(t[j]);
-				distances[i][j] = Double.parseDouble(s[j]);
+				// times are given in seconds
+				times[i][j] = Integer.parseInt(t[j]) / 60;
+				// distances are given in metres
+				distances[i][j] = Double.parseDouble(s[j]) / 1000;
 			}
 		}
+		
 		Information in = new Information(numNodes, times, distances);
 		return in;
 	}

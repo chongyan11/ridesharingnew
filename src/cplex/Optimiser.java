@@ -275,7 +275,6 @@ public class Optimiser {
 				for (int i = 0; i < nDrivers; i++) {
 					for (int j = 0; j < nRiders; j++) {
 						matches[i][j] = (int) cplex.getValue(x[i][j]);
-						System.out.print(matches[i][j] + " ");
 						if (matches[i][j] == 1) {
 							matchedParticipantList.add(driverAnnouncements.get(i).id);
 							matchedParticipantList.add(riderAnnouncements.get(j).id);
@@ -285,7 +284,6 @@ public class Optimiser {
 							soloParticipantList.add(riderAnnouncements.get(j).id);
 						}
 					}
-					System.out.println();
 				}
 			} 			
 		} catch (IloException e) {

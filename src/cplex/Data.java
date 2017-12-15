@@ -8,7 +8,7 @@ import java.util.*;
 public class Data {
 	public static int numAnnouncements; // Some function should define numAnnouncements
 	public static final int numInfo = 6;	// number of attributes within each trip announcement
-	public static int numNodes = 6;
+	public static int numNodes;
 	public static double[][] distances;
 	public static int[][] times;
 	

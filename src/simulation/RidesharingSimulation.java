@@ -17,7 +17,8 @@ public class RidesharingSimulation{
 	private static final int ARRIVAL_TIME_INDEX = 3;
 	private static final int ORIGIN_INDEX = 4;
 	private static final int DESTINATION_INDEX = 5;
-	private static final int OPTIMISATION_TIME_INTERVAL = 10;
+	
+	private static final int OPTIMISATION_TIME_INTERVAL = 5;
 
 	private static final String SIMULATION_PARTICIPANTS_FILE_NAME = "participants.csv";
 	private static final String OPTIMISATION_PARTICIPANTS_FILE_NAME = "opt.csv";
