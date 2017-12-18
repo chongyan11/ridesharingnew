@@ -19,6 +19,8 @@ public class Optimiser {
 	private static Double ridesharingPayments = 0.0;
 	private static Double distanceSaved = 0.0;
 	private static int[][] matches;
+	private static double[] paymentsByNode;
+	private static double[] rideshareDistanceByNode;
 	
 	public static void run(String fileName) throws NoSuchFileException, IOException {
 		matchedParticipantList.clear();
@@ -31,6 +33,8 @@ public class Optimiser {
 		Data.distances = info.distances;
 		ArrayList<String> rawData = readData(fileName);
 		Data.processData(rawData);
+		paymentsByNode = new double[Data.numNodes];
+		rideshareDistanceByNode = new double[Data.numNodes];
 		model();
 	}
 	
@@ -279,13 +283,21 @@ public class Optimiser {
 							matchedParticipantList.add(driverAnnouncements.get(i).id);
 							matchedParticipantList.add(riderAnnouncements.get(j).id);
 							ridesharingPayments += cplex.getValue(p[i][j]);
+							paymentsByNode[driverAnnouncements.get(i).origin - 1] += cplex.getValue(p[i][j]);
+							// System.out.println(cplex.getValue(p[i][j]));
+							rideshareDistanceByNode[driverAnnouncements.get(i).origin - 1] += rideshareDistance[i][j];
 						} else {
 							soloParticipantList.add(driverAnnouncements.get(i).id);
 							soloParticipantList.add(riderAnnouncements.get(j).id);
 						}
 					}
 				}
-			} 			
+			} 
+//			for (int i = 0; i < Data.numNodes; i++) {
+//				System.out.print(paymentsByNode[i] + " ");
+//				System.out.println(rideshareDistanceByNode[i] + " ");
+//			}
+			System.out.println();
 		} catch (IloException e) {
 			e.printStackTrace();
 			System.out.println("infeasible");
@@ -401,5 +413,13 @@ public class Optimiser {
 	
 	public static Double getDistanceSaved() {
 		return distanceSaved;
+	}
+	
+	public static double[] getRideshareDistanceByNode() {
+		return rideshareDistanceByNode;
+	}
+	
+	public static double[] getRidesharePaymentsByNode() {
+		return paymentsByNode;
 	}
 }

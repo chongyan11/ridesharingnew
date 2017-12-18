@@ -11,6 +11,8 @@ public class OptimisationEvent {
 	private int eventTime;
 	private double ridesharingPayments;
 	private double distanceSaved;
+	private double[] ridesharePaymentsByNode;
+	private double[] rideshareDistanceByNode;
 	private String fileName;
 	private ArrayList<Integer> matchedParticipants;
 	private ArrayList<Integer> soloParticipants;
@@ -35,6 +37,14 @@ public class OptimisationEvent {
 		return distanceSaved;
 	}
 	
+	public double[] getRidesharePaymentsByNode() {
+		return ridesharePaymentsByNode;
+	}
+	
+	public double[] getRideshareDistanceByNode() {
+		return rideshareDistanceByNode;
+	}
+	
 	public void setFileName(String fileName) {
 		this.fileName = fileName;
 	}
@@ -45,5 +55,7 @@ public class OptimisationEvent {
 		soloParticipants = Optimiser.getSoloParticipants();
 		ridesharingPayments = Optimiser.getRidesharingPayments();
 		distanceSaved = Optimiser.getDistanceSaved();
+		ridesharePaymentsByNode = Optimiser.getRidesharePaymentsByNode();
+		rideshareDistanceByNode = Optimiser.getRideshareDistanceByNode();
 	}
 }
