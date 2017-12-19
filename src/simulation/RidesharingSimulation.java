@@ -1,4 +1,5 @@
 package simulation;
+import java.io.Closeable;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.NoSuchFileException;
@@ -7,8 +8,7 @@ import java.util.ArrayList;
 import cplex.*;
 import filereader.InputOutput;
 
-public class RidesharingSimulation{
-	private static final int SEED = 1;
+public class RidesharingSimulation implements Closeable{
 	private static final int NUM_INFO = 7;
 	private static final int SERIAL_NO_INDEX = 0;
 	private static final int ANNOUNCEMENT_TIME_INDEX = 6;
@@ -27,42 +27,48 @@ public class RidesharingSimulation{
 	private static final String OPTIMISATION_PARTICIPANTS_FILE_NAME = "opt.csv";
 	
 	private int simPeriod;	// length of simulation in minutes
-	private int totalDemand;	// number of participants, both riders and drivers
 	private double totalRidesharingPayments = 0;	// sum of ridesharing payments received by all drivers
 	private int numMatches = 0;		// number of participants matched
 	private double successRate;	// PERFORMANCE MEASURE: proportion of trip announcements matched
 	private int currentTime = 0;
 	private double distanceSaved = 0.0;
 	private int demandCount = 0;
+	private double maxTotalDistance = 0.0;
+	private int seed;
+	private double paymentSplit;
 	
 	private int initialDemand;
-	private int[] driverDemand;
-	private int[] riderDemand;
+	private int driverDemand;
+	private int riderDemand;
 	
 	private ArrayList<Integer[]> fullList = new ArrayList<Integer[]> ();
 	private ArrayList<Integer> optTimeList;
 	private ArrayList<ArrayList<Integer[]>> archive = new ArrayList<ArrayList<Integer[]>>();
+	
+	private Result result;
 
-	public RidesharingSimulation (int simPeriod, int totalDemand, int initialDemand) {
+	public RidesharingSimulation (int simPeriod, int initialDemand) {
 		this.simPeriod = simPeriod;
-		this.totalDemand = totalDemand;
 		this.initialDemand = initialDemand;
+	}
+	
+	public RidesharingSimulation(Params params) {
+		this.simPeriod = params.simulationPeriod;
+		this.initialDemand = params.initialDemand;
+		this.seed = params.seed;
+		this.paymentSplit = params.paymentSplit;
 	}
 	
 	// main function called by Main
 	public void run() {
 		try {
 			Information info = InputOutput.readBackground();
-			setupInitialDemandArrays(info.numNodes);
-			// generateParticipants(info);
+			setupInitialDemand(info.numNodes);
 			writeList(SIMULATION_PARTICIPANTS_FILE_NAME, fullList);	// full list of participants generated at the start will be printed
 			generateOptimisationTimings();
 			runSimulation(info);
 			successRate = (double) numMatches / demandCount;
-			System.out.println("Number of successful matches: " + numMatches);
-			System.out.println("Fraction of successful matches: " + successRate);
-			System.out.println("Total ridesharing payments collected: " + totalRidesharingPayments);
-			System.out.println("Total distance saved: " + distanceSaved);
+			result = new Result(numMatches, demandCount, successRate, totalRidesharingPayments, maxTotalDistance, distanceSaved);
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
@@ -81,17 +87,19 @@ public class RidesharingSimulation{
 			totalRidesharingPayments += oe.getPayments();
 			numMatches += oe.getMatchedParticipants().size();
 			distanceSaved += oe.getDistanceSaved();
+			maxTotalDistance += oe.getTotalDistance();
 			double[] rideshareDistanceByNode = oe.getRideshareDistanceByNode();
 			double[] ridesharePaymentsByNode = oe.getRidesharePaymentsByNode();
 			updateList(oe);
-//			if (currentTime > OPTIMISATION_TIME_INTERVAL)
-//				updateDemand(rideshareDistanceByNode, ridesharePaymentsByNode, info.numNodes);
+			if (currentTime > OPTIMISATION_TIME_INTERVAL)
+				updateDemand(rideshareDistanceByNode, ridesharePaymentsByNode, info.numNodes);
+			oe.close();
 		}
 	}
 	
 	// creates OptimisationEvent object for each and every optimisation run, called by runSimulation();
 	private OptimisationEvent createOptimisationEvent(int optTime) throws IOException {
-		OptimisationEvent oe = new OptimisationEvent(optTime);
+		OptimisationEvent oe = new OptimisationEvent(optTime, paymentSplit);
 		ArrayList<Integer[]> optParticipantList = getParticipants(optTime);
 		String filename = Integer.toString(optTime) + OPTIMISATION_PARTICIPANTS_FILE_NAME;
 		writeList(filename, optParticipantList);
@@ -169,23 +177,21 @@ public class RidesharingSimulation{
 	}
 	
 	private void generateNewParticipants(int time, Information bg) {
-		Random random = new Random(SEED);
+		Random random = new Random(time + seed);
 		ArrayList<Integer[]> list = new ArrayList<Integer[]>();
-		for (int i = 0; i < bg.numNodes; i++) {
-			for (int j = 0; j < driverDemand[i]; j++)
-				generateParticipant(DRIVER_TYPE, (i+1), time, random, bg, list);
-			for (int j = 0; j < riderDemand[i]; j++) 
-				generateParticipant(RIDER_TYPE, (i+1), time, random, bg, list);
-		}
+		for (int j = 0; j < driverDemand; j++)
+			list.add(generateParticipant(DRIVER_TYPE, time, random, bg));
+		for (int j = 0; j < riderDemand; j++) 
+			list.add(generateParticipant(RIDER_TYPE, time, random, bg));
 		archive.add(list);
 	}
 	
-	private void generateParticipant(int type, int origin, int time, Random random, Information bg, ArrayList<Integer[]> list) {
+	private Integer[] generateParticipant(int type, int time, Random random, Information bg) {
 		demandCount++;
 		Integer[] item = new Integer[NUM_INFO];
 		item[SERIAL_NO_INDEX] = demandCount;
 		item[TYPE_INDEX] = type;
-		item[ORIGIN_INDEX] = origin;
+		item[ORIGIN_INDEX] = 1 + random.nextInt(bg.numNodes);
 		int temp = 1 + random.nextInt(bg.numNodes);
 		while (temp == item[ORIGIN_INDEX])
 			temp = 1 + random.nextInt(bg.numNodes);
@@ -194,16 +200,12 @@ public class RidesharingSimulation{
 		item[DEPARTURE_TIME_INDEX] = item[ANNOUNCEMENT_TIME_INDEX] + random.randInt(10, 30);	// participant should leave between 10 to 30 min of announcement
 		item[ARRIVAL_TIME_INDEX] = item[DEPARTURE_TIME_INDEX] + bg.times[item[ORIGIN_INDEX]-1][item[DESTINATION_INDEX]-1] + random.randInt(20, 40); // participants have a 20-40 min buffer
 		fullList.add(item);
-		list.add(item);
+		return item;
 	}
 	
-	private void setupInitialDemandArrays(int numNodes) {
-		riderDemand = new int[numNodes];
-		driverDemand = new int[numNodes];
-		for (int i = 0; i < numNodes; i++) {
-			riderDemand[i] = (initialDemand / numNodes) / 2;
-			driverDemand[i] = (initialDemand / numNodes) / 2;
-		}
+	private void setupInitialDemand(int numNodes) {
+		riderDemand = initialDemand / 2;
+		driverDemand = initialDemand / 2;
 	}
 	
 	private void updateDemand(double[] distances, double[] payments, int numNodes) {
@@ -214,8 +216,18 @@ public class RidesharingSimulation{
 			else
 				paymentRate[i] = 0.0;
 		}
-		driverDemand = Demand.updateDemand(DRIVER_TYPE, paymentRate, driverDemand, numNodes);
-		riderDemand = Demand.updateDemand(RIDER_TYPE, paymentRate, riderDemand, numNodes);
+		driverDemand = Demand.updateDemand(DRIVER_TYPE, paymentRate, driverDemand);
+		riderDemand = Demand.updateDemand(RIDER_TYPE, paymentRate, riderDemand);
+		System.out.println(driverDemand + " " + riderDemand);
+	}
+	
+	public Result getResult() {
+		return result;
+	}
+
+	public void close() throws IOException {
+		// TODO Auto-generated method stub
+		
 	}
 
 /* TODO:	

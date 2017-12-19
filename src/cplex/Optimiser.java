@@ -18,15 +18,19 @@ public class Optimiser {
 	private static ArrayList<Integer> soloParticipantList = new ArrayList<Integer>();
 	private static Double ridesharingPayments = 0.0;
 	private static Double distanceSaved = 0.0;
+	private static Double maxSysMileage = 0.0;
 	private static int[][] matches;
 	private static double[] paymentsByNode;
 	private static double[] rideshareDistanceByNode;
+	private static double split;
 	
-	public static void run(String fileName) throws NoSuchFileException, IOException {
+	public static void run(String fileName, double paymentSplit) throws NoSuchFileException, IOException {
 		matchedParticipantList.clear();
 		soloParticipantList.clear();
 		ridesharingPayments = 0.0;
 		distanceSaved = 0.0;
+		maxSysMileage = 0.0;
+		split = paymentSplit;
 		Information info = InputOutput.readBackground();
 		Data.numNodes = info.numNodes;
 		Data.times = info.times;
@@ -235,7 +239,7 @@ public class Optimiser {
 						 */
 						matchConstraints.add(cplex.ge(p[i][j], minPayment[i][j], "Constraint 5"));
 						matchConstraints.add(cplex.le(p[i][j], maxPayment[i][j], "Constraint 6"));
-						matchConstraints.add(cplex.eq(p[i][j], (0.5 * (minPayment[i][j] + maxPayment[i][j])), "Constraint 7"));
+						matchConstraints.add(cplex.eq(p[i][j], (split * minPayment[i][j] + (1.0 - split) * maxPayment[i][j]), "Constraint 7"));
 						
 						/*
 						 * Adding matchConstraints into cplex solver
@@ -273,6 +277,7 @@ public class Optimiser {
 // *** Solving and printing solutions ***
 			if (cplex.solve()) {
 				System.out.println("Maximum System Mileage(km): " + maxSystemMileage);
+				maxSysMileage = maxSystemMileage;
 				System.out.println("Total Distance Savings(km): " + cplex.getObjValue());
 				distanceSaved = cplex.getObjValue();
 				matches = new int[nDrivers][nRiders];
@@ -298,6 +303,8 @@ public class Optimiser {
 //				System.out.println(rideshareDistanceByNode[i] + " ");
 //			}
 			System.out.println();
+			
+			cplex.endModel();
 		} catch (IloException e) {
 			e.printStackTrace();
 			System.out.println("infeasible");
@@ -421,5 +428,9 @@ public class Optimiser {
 	
 	public static double[] getRidesharePaymentsByNode() {
 		return paymentsByNode;
+	}
+	
+	public static double getTotalDistance() {
+		return maxSysMileage;
 	}
 }

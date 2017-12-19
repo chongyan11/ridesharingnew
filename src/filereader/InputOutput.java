@@ -7,15 +7,18 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 
+import simulation.Params;
+import simulation.Result;
+
 public class InputOutput {
 	private static final String INPUT_FILE_NAME = "test.csv";
 	private static final String BG_FILE_NAME = "nodes.csv";
+	private static final String RESULT_FILE_NAME = "result.csv";
 	
 	public static String getFileName(Integer i) {
 		String testNum = i.toString();
@@ -95,5 +98,29 @@ public class InputOutput {
 			pw.println(line);
 		}
 		pw.close();
+	}
+	
+	public static void appendResult(Result result, Params params) {
+		try {
+			PrintWriter pw = new PrintWriter(new FileWriter(RESULT_FILE_NAME, true));
+			String line = new String();
+			line = params.initialDemand + "," + params.paymentSplit + "," + params.simulationPeriod + "," 
+					+ result.successfulMatches + "," + result.totalDemand + "," + result.successRate + "," + result.totalRidesharingPayments + "," 
+					+ result.totalDistanceSaved + "," + result.maxSystemMileage;
+			pw.println(line);
+			pw.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public static void clearResultFile() {
+		try {
+			PrintWriter pw = new PrintWriter(new FileWriter(RESULT_FILE_NAME));
+			pw.print("");
+			pw.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 }
