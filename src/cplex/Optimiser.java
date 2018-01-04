@@ -23,14 +23,16 @@ public class Optimiser {
 	private static double[] paymentsByNode;
 	private static double[] rideshareDistanceByNode;
 	private static double split;
+	private static boolean surge;
 	
-	public static void run(String fileName, double paymentSplit) throws NoSuchFileException, IOException {
+	public static void run(String fileName, double paymentSplit, boolean s) throws NoSuchFileException, IOException {
 		matchedParticipantList.clear();
 		soloParticipantList.clear();
 		ridesharingPayments = 0.0;
 		distanceSaved = 0.0;
 		maxSysMileage = 0.0;
 		split = paymentSplit;
+		surge = s;
 		Information info = InputOutput.readBackground();
 		Data.numNodes = info.numNodes;
 		Data.times = info.times;
@@ -131,8 +133,8 @@ public class Optimiser {
 			shareDriverF = Cost.generateShareDriverOutOfPocketCost(rideshareDistance, nDrivers, nRiders, driverDestinations);
 			shareDriverIC = Cost.generateShareDriverInconvenienceCost(rideshareDistance, odDrivers, odRiders, todor, tordr, tdrdd, toddd, nDrivers, nRiders);
 			shareDriverTotalCost = Cost.generateShareDriverTotalCost(shareDriverTC, shareDriverF, shareDriverIC, nDrivers, nRiders);
-			minPayment = Cost.generateMinRidesharingPayment(shareDriverTotalCost, soloDriverTotalCost, nDrivers, nRiders);
-			maxPayment = Cost.generateMaxRidesharingPayment(soloRiderF, nDrivers, nRiders);	// at this point, max ridesharing fare = taxi fare
+			minPayment = Cost.generateMinRidesharingPayment(shareDriverTotalCost, soloDriverTotalCost, nDrivers, nRiders, surge);
+			maxPayment = Cost.generateMaxRidesharingPayment(soloRiderF, nDrivers, nRiders, surge);	// at this point, max ridesharing fare = taxi fare
 			feasiblePaymentMatches = Cost.generateFeasiblePaymentMatches(minPayment, maxPayment, nDrivers, nRiders);
 			costSavings = Cost.generateCostSavingsMatrix(soloDriverTotalCost, soloRiderTotalCost, shareDriverTotalCost, nDrivers, nRiders);
 			

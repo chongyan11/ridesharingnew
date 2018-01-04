@@ -36,8 +36,15 @@ public class RidesharingSimulation implements Closeable{
 	private double maxTotalDistance = 0.0;
 	private int seed;
 	private double paymentSplit;
+	private boolean surge;
+	private double[] destinationWeights;
+	private double[] originWeights;
+	private double[] demandMultiplier;
+	private double VOT;
+	private double surgeDemandFactor;
+	private double surgeSupplyFactor;
 	
-	private int initialDemand;
+	private int baseDemand;
 	private int driverDemand;
 	private int riderDemand;
 	
@@ -49,22 +56,32 @@ public class RidesharingSimulation implements Closeable{
 
 	public RidesharingSimulation (int simPeriod, int initialDemand) {
 		this.simPeriod = simPeriod;
-		this.initialDemand = initialDemand;
+		this.baseDemand = initialDemand;
 	}
 	
 	public RidesharingSimulation(Params params) {
 		this.simPeriod = params.simulationPeriod;
-		this.initialDemand = params.initialDemand;
+		this.baseDemand = params.baseDemand;
 		this.seed = params.seed;
 		this.paymentSplit = params.paymentSplit;
+		this.surge = params.surge;
+		this.VOT = params.VOT;
+		this.surgeDemandFactor = params.surgeDemand;
+		this.surgeSupplyFactor = params.surgeSupply;
 	}
 	
 	// main function called by Main
 	public void run() {
 		try {
+			Cost.setVOT(VOT);
+			if (surge) {
+				Cost.setSurge(surgeDemandFactor, surgeSupplyFactor);
+			}
+			// change size of demand multiplier array if simulation duration changes
+			demandMultiplier = InputOutput.readDemandMultiplier();
 			Information info = InputOutput.readBackground();
 			setupInitialDemand(info.numNodes);
-			writeList(SIMULATION_PARTICIPANTS_FILE_NAME, fullList);	// full list of participants generated at the start will be printed
+			writeList(SIMULATION_PARTICIPANTS_FILE_NAME, fullList);	// full list of participants will be printed
 			generateOptimisationTimings();
 			runSimulation(info);
 			successRate = (double) numMatches / demandCount;
@@ -78,6 +95,7 @@ public class RidesharingSimulation implements Closeable{
 	
 	// runs optimisation at fixed intervals, called by run()
 	private void runSimulation(Information info) throws IOException, NoSuchFileException {
+		int count = 1;
 		while (!optTimeList.isEmpty()) {
 			generateNewParticipants(optTimeList.get(0), info);
 			OptimisationEvent oe = createOptimisationEvent(optTimeList.get(0));
@@ -92,14 +110,15 @@ public class RidesharingSimulation implements Closeable{
 			double[] ridesharePaymentsByNode = oe.getRidesharePaymentsByNode();
 			updateList(oe);
 			if (currentTime > OPTIMISATION_TIME_INTERVAL)
-				updateDemand(rideshareDistanceByNode, ridesharePaymentsByNode, info.numNodes);
+				updateDemand(rideshareDistanceByNode, ridesharePaymentsByNode, info.numNodes, demandMultiplier[count]);
 			oe.close();
+			count++;
 		}
 	}
 	
 	// creates OptimisationEvent object for each and every optimisation run, called by runSimulation();
 	private OptimisationEvent createOptimisationEvent(int optTime) throws IOException {
-		OptimisationEvent oe = new OptimisationEvent(optTime, paymentSplit);
+		OptimisationEvent oe = new OptimisationEvent(optTime, paymentSplit, surge);
 		ArrayList<Integer[]> optParticipantList = getParticipants(optTime);
 		String filename = Integer.toString(optTime) + OPTIMISATION_PARTICIPANTS_FILE_NAME;
 		writeList(filename, optParticipantList);
@@ -181,6 +200,7 @@ public class RidesharingSimulation implements Closeable{
 		ArrayList<Integer[]> list = new ArrayList<Integer[]>();
 		for (int j = 0; j < driverDemand; j++)
 			list.add(generateParticipant(DRIVER_TYPE, time, random, bg));
+		// System.out.println();
 		for (int j = 0; j < riderDemand; j++) 
 			list.add(generateParticipant(RIDER_TYPE, time, random, bg));
 		archive.add(list);
@@ -191,10 +211,10 @@ public class RidesharingSimulation implements Closeable{
 		Integer[] item = new Integer[NUM_INFO];
 		item[SERIAL_NO_INDEX] = demandCount;
 		item[TYPE_INDEX] = type;
-		item[ORIGIN_INDEX] = 1 + random.nextInt(bg.numNodes);
-		int temp = 1 + random.nextInt(bg.numNodes);
+		item[ORIGIN_INDEX] = randomGenerateLocation(originWeights, random); 
+		int temp = randomGenerateLocation(destinationWeights, random); // 1 + random.nextInt(bg.numNodes);
 		while (temp == item[ORIGIN_INDEX])
-			temp = 1 + random.nextInt(bg.numNodes);
+			temp = randomGenerateLocation(destinationWeights, random); // 1 + random.nextInt(bg.numNodes);
 		item[DESTINATION_INDEX] = temp;
 		item[ANNOUNCEMENT_TIME_INDEX] = time + 1;
 		item[DEPARTURE_TIME_INDEX] = item[ANNOUNCEMENT_TIME_INDEX] + random.randInt(10, 30);	// participant should leave between 10 to 30 min of announcement
@@ -204,11 +224,17 @@ public class RidesharingSimulation implements Closeable{
 	}
 	
 	private void setupInitialDemand(int numNodes) {
-		riderDemand = initialDemand / 2;
-		driverDemand = initialDemand / 2;
+		
+		// To scrap after implementing arrayed demand
+		riderDemand = (int) (0.55 * baseDemand * demandMultiplier[0]);
+		driverDemand = (int) (0.45 * baseDemand * demandMultiplier[0]);
+		
+		Demand.readDistributions();
+		originWeights = Demand.getOriginWeights();
+		destinationWeights = Demand.getDestinationWeights();
 	}
 	
-	private void updateDemand(double[] distances, double[] payments, int numNodes) {
+	private void updateDemand(double[] distances, double[] payments, int numNodes, double multiplier) {
 		double[] paymentRate = new double[numNodes];
 		for (int i = 0; i < numNodes; i++) {
 			if (distances[i] > 0)
@@ -216,8 +242,17 @@ public class RidesharingSimulation implements Closeable{
 			else
 				paymentRate[i] = 0.0;
 		}
-		driverDemand = Demand.updateDemand(DRIVER_TYPE, paymentRate, driverDemand);
-		riderDemand = Demand.updateDemand(RIDER_TYPE, paymentRate, riderDemand);
+		
+		// reference point is based on baseDemand instead of most recent demand, reason being the multiplier already takes into account changes according to time
+		driverDemand = (int) Demand.updateDemand(DRIVER_TYPE, paymentRate, driverDemand, multiplier);
+		riderDemand = (int) Demand.updateDemand(RIDER_TYPE, paymentRate, riderDemand, multiplier);
+		
+		// Stopgap measure
+		if (driverDemand > 2 * riderDemand) {
+			driverDemand = 2 * riderDemand;
+		} else if (riderDemand > 2 * driverDemand) {
+			riderDemand = 2 * driverDemand;
+		}
 		System.out.println(driverDemand + " " + riderDemand);
 	}
 	
@@ -228,6 +263,25 @@ public class RidesharingSimulation implements Closeable{
 	public void close() throws IOException {
 		// TODO Auto-generated method stub
 		
+	}
+	
+	public int randomGenerateLocation(double[] weights, Random random) {
+		// Setting up 
+		int location = 0;
+		double sumWeights = 0.0;
+		for (int i = 0; i < weights.length; i++)
+			sumWeights += weights[i];
+		double[] dartboard = new double[weights.length + 1];
+		dartboard[0] = 0.0;
+		for (int i = 1; i < dartboard.length; i++) 
+			dartboard[i] = weights[i-1] / sumWeights + dartboard[i-1];
+		// Generating location
+		double rand = random.nextDouble();
+		for (int i = 0; i < (dartboard.length - 1); i++)
+			if (dartboard[i] < rand && rand <= dartboard[i+1])
+				location = i+1;
+		// System.out.print(location + " ");
+		return location;
 	}
 
 /* TODO:	

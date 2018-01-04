@@ -4,7 +4,6 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.NoSuchFileException;
 import java.util.ArrayList;
-import cplex.Pair;
 
 import cplex.Optimiser;
 
@@ -16,13 +15,15 @@ public class OptimisationEvent implements Closeable {
 	private double totalDistance;
 	private double[] ridesharePaymentsByNode;
 	private double[] rideshareDistanceByNode;
+	private boolean surge;
 	private String fileName;
 	private ArrayList<Integer> matchedParticipants;
 	private ArrayList<Integer> soloParticipants;
 		
-	public OptimisationEvent(int eventTime, double paymentSplit) {
+	public OptimisationEvent(int eventTime, double paymentSplit, boolean surge) {
 		this.eventTime = eventTime;
 		this.paymentSplit = paymentSplit;
+		this.surge = surge;
 	}
 	
 	public double getPayments() {
@@ -58,7 +59,7 @@ public class OptimisationEvent implements Closeable {
 	}
 	
 	public void runOptimisation() throws NoSuchFileException, IOException{
-		Optimiser.run(fileName, paymentSplit);
+		Optimiser.run(fileName, paymentSplit, surge);
 		matchedParticipants = Optimiser.getMatchedParticipants();
 		soloParticipants = Optimiser.getSoloParticipants();
 		ridesharingPayments = Optimiser.getRidesharingPayments();

@@ -17,8 +17,13 @@ import simulation.Result;
 
 public class InputOutput {
 	private static final String INPUT_FILE_NAME = "test.csv";
-	private static final String BG_FILE_NAME = "nodes.csv";
+	private static final String BG_FILE_NAME = "nodeinfo.csv";
 	private static final String RESULT_FILE_NAME = "result.csv";
+	private static final String ORIGIN_POPULATION_FILE_NAME = "residential-populations.csv";
+	private static final String ORIGIN_ATTRACTIVENESS_FILE_NAME = "mrt-estates-origin.csv";
+	private static final String DESTINATION_FACTOR_FILE_NAME = "industrial-weights.csv";
+	private static final String DESTINATION_ATTRACTIVENESS_FILE_NAME = "mrt-industrial-destination.csv";
+	private static final String DEMAND_MULTIPLIER_FILE_NAME = "demand-multiplier.csv";
 	
 	public static String getFileName(Integer i) {
 		String testNum = i.toString();
@@ -104,7 +109,7 @@ public class InputOutput {
 		try {
 			PrintWriter pw = new PrintWriter(new FileWriter(RESULT_FILE_NAME, true));
 			String line = new String();
-			line = params.initialDemand + "," + params.paymentSplit + "," + params.simulationPeriod + "," 
+			line = params.baseDemand + "," + params.simulationPeriod + "," + params.surge + "," + params.VOT + "," + params.surgeDemand + "," + params.surgeSupply + ","  
 					+ result.successfulMatches + "," + result.totalDemand + "," + result.successRate + "," + result.totalRidesharingPayments + "," 
 					+ result.totalDistanceSaved + "," + result.maxSystemMileage;
 			pw.println(line);
@@ -122,5 +127,126 @@ public class InputOutput {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+	}
+	
+	public static double[] readOriginPopulations() {
+		try {
+			BufferedReader br = new BufferedReader(new FileReader(ORIGIN_POPULATION_FILE_NAME));
+			String line = new String();
+			ArrayList<Integer> populations = new ArrayList<Integer>();
+			while ((line = br.readLine()) != null) {
+				String[] words = line.split(",");
+				populations.add(Integer.parseInt(words[1]));
+			}
+			double[] originPopulations = new double[populations.size()];
+			for (int i = 0; i < populations.size(); i++) {
+				originPopulations[i] = (double) populations.get(i);
+				// System.out.print(originPopulations[i] + " ");
+			}
+			br.close();
+			return originPopulations;
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return new double[1];
+	}
+	
+	public static double[][] readOriginAttractiveness() {
+		try {
+			BufferedReader br = new BufferedReader(new FileReader(ORIGIN_ATTRACTIVENESS_FILE_NAME));
+			String line = new String();
+			ArrayList<ArrayList<Integer>> attractiveness = new ArrayList<ArrayList<Integer>>();
+			line = br.readLine();
+			while ((line = br.readLine()) != null) {
+				ArrayList<Integer> temp = new ArrayList<Integer> ();
+				String[] words = line.split(",");
+				for (int j = 1; j < words.length; j++) {
+					temp.add(Integer.parseInt(words[j]));
+				}
+				attractiveness.add(temp);
+			}
+			double[][] OA = new double[attractiveness.size()][attractiveness.get(0).size()];
+			for (int k = 0; k < attractiveness.size(); k++) {
+				for (int j = 0; j < attractiveness.get(0).size(); j++) {
+					OA[k][j] = attractiveness.get(k).get(j) / 1000.0;
+					// System.out.print(OA[k][j] + " ");
+				}
+				// System.out.println();
+			}
+			return OA;
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return new double[1][1];
+	}
+	
+	public static double[] readDestinationFactors() {
+		try {
+			BufferedReader br = new BufferedReader(new FileReader(DESTINATION_FACTOR_FILE_NAME));
+			String line = new String();
+			ArrayList<Integer> factors = new ArrayList<Integer>();
+			while ((line = br.readLine()) != null) {
+				String[] words = line.split(",");
+				factors.add(Integer.parseInt(words[1]));
+			}
+			double[] destinationFactors = new double[factors.size()];
+			for (int i = 0; i < factors.size(); i++) {
+				destinationFactors[i] = (double) factors.get(i);
+				// System.out.print(destinationFactors[i] + " ");
+			}
+			br.close();
+			return destinationFactors;
+	} catch (IOException e) {
+		e.printStackTrace();
+	}
+	return new double[1];
+	}
+	
+	public static double[][] readDestinationAttractiveness() {
+		try {
+			BufferedReader br = new BufferedReader(new FileReader(DESTINATION_ATTRACTIVENESS_FILE_NAME));
+			String line = new String();
+			ArrayList<ArrayList<Integer>> attractiveness = new ArrayList<ArrayList<Integer>>();
+			line = br.readLine();
+			while ((line = br.readLine()) != null) {
+				ArrayList<Integer> temp = new ArrayList<Integer> ();
+				String[] words = line.split(",");
+				for (int j = 1; j < words.length; j++) {
+					temp.add(Integer.parseInt(words[j]));
+				}
+				attractiveness.add(temp);
+			}
+			double[][] DA = new double[attractiveness.size()][attractiveness.get(0).size()];
+			for (int k = 0; k < attractiveness.size(); k++) {
+				for (int j = 0; j < attractiveness.get(0).size(); j++) {
+					DA[k][j] = attractiveness.get(k).get(j) / 1000.0;
+					// System.out.print(DA[k][j] + " ");
+				}
+				// System.out.println();
+			}
+			return DA;
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return new double[1][1];
+	}
+	
+	public static double[] readDemandMultiplier() {
+		try {
+			BufferedReader br = new BufferedReader(new FileReader(DEMAND_MULTIPLIER_FILE_NAME));
+			String line = new String();
+			ArrayList<Double> multipliers = new ArrayList<Double>();
+			while((line = br.readLine()) != null) {
+				multipliers.add(Double.parseDouble(line));
+			}
+			double[] array = new double[multipliers.size()];
+			for (int i = 0; i < multipliers.size(); i++) {
+				array[i] = multipliers.get(i);
+			}
+			return array;
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return new double[1];
 	}
 }

@@ -2,7 +2,7 @@ package cplex;
 
 public class Cost {
 	// read cost coefficients from file later on
-	private static final double VALUE_OF_TIME = 0.5;
+	private static double VALUE_OF_TIME = 0.5;
 	private static final double DRIVER_IC_TIME = 0.2;
 	private static final double DRIVER_IC_DISTANCE = 0.25;
 	private static final double RIDER_IC_TIME = 0;
@@ -16,6 +16,18 @@ public class Cost {
 	private static final double TAXI_DISTANCE_UNIT = 0.4;
 	private static final double TAXI_TIME_COST = 0.22;
 	private static final double TAXI_TIME_UNIT = 0.75;
+	
+	private static double SURGE_DEMAND_FACTOR = 0.2;	// for demand side --> maxPayment to increase
+	private static double SURGE_SUPPLY_FACTOR = 0.1;	// for supply side --> minPayment to increase
+	
+	public static void setVOT(double vot) {
+		VALUE_OF_TIME = vot;
+	}
+	
+	public static void setSurge(double surgeDemand, double surgeSupply) {
+		SURGE_DEMAND_FACTOR = surgeDemand;
+		SURGE_SUPPLY_FACTOR = surgeSupply;
+	}
 	
 	public static double[] generateSoloTimeCost(double[] odTime, int n) {
 		double[] soloTC = new double[n];
@@ -105,21 +117,43 @@ public class Cost {
 		return totalCost;
 	}
 	
-	public static double[][] generateMinRidesharingPayment(double[][] shareDriverTotalCost, double[] soloDriverTotalCost, int nDrivers, int nRiders) {
+	public static double[][] generateMinRidesharingPayment(double[][] shareDriverTotalCost, double[] soloDriverTotalCost, int nDrivers, int nRiders, boolean surge) {
+		double surgeRatio = 0.0;
+		if (nDrivers > 0)
+			surgeRatio = (double) nRiders / (double) nDrivers;
 		double[][] minPayment = new double[nDrivers][nRiders];
 		for (int i = 0; i < nDrivers; i++) {
 			for (int j = 0; j < nRiders; j++) {
-				minPayment[i][j] = shareDriverTotalCost[i][j] - soloDriverTotalCost[i];
+				if (surge == false) {
+					minPayment[i][j] = shareDriverTotalCost[i][j] - soloDriverTotalCost[i];
+				} else {
+					if (surgeRatio > 1.0) {
+						minPayment[i][j] = (shareDriverTotalCost[i][j] - soloDriverTotalCost[i]) * (surgeRatio * (SURGE_DEMAND_FACTOR + 1.0));
+					} else {
+						minPayment[i][j] = shareDriverTotalCost[i][j] - soloDriverTotalCost[i];
+					}
+				}
 			}
 		}
 		return minPayment;
 	}
 	
-	public static double[][] generateMaxRidesharingPayment(double[] soloRiderF, int nDrivers, int nRiders) {
+	public static double[][] generateMaxRidesharingPayment(double[] soloRiderF, int nDrivers, int nRiders, boolean surge) {
+		double surgeRatio = 0.0;
+		if (nDrivers > 0)
+			surgeRatio = (double) nRiders / (double) nDrivers;
 		double[][] maxPayment = new double[nDrivers][nRiders];
 		for (int i = 0; i < nDrivers; i++) {
 			for (int j = 0; j < nRiders; j++) {
-				maxPayment[i][j] = soloRiderF[j];
+				if (surge == false) {
+					maxPayment[i][j] = soloRiderF[j];
+				} else {
+					if (surgeRatio > 1.0) {
+						maxPayment[i][j] = soloRiderF[j] * (surgeRatio * (SURGE_SUPPLY_FACTOR + 1.0));
+					} else {
+						maxPayment[i][j] = soloRiderF[j];
+					}
+				}
 			}
 		}
 		return maxPayment;
